@@ -1,0 +1,23 @@
+# Core
+torch==2.13.0
+numpy==2.5.2
+PyYAML==6.0.3
+
+# Metrics / analysis
+scikit-learn==1.9.0
+
+# Plotting
+matplotlib==3.11.1
+
+# Progress bars
+tqdm==4.70.0
+
+# --- Notes ---
+# CPU-only install (what this repo was developed against):
+#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt   # the torch==2.13.0 pin is satisfied by 2.13.0+cpu, so pip will not reinstall it
+# GPU (CUDA) install: install the matching torch build for your CUDA version
+# from https://pytorch.org/get-started/locally/ *before* running
+# `pip install -r requirements.txt`, then this file's torch==2.13.0 pin will
+# be satisfied by the already-installed GPU build (pip will not reinstall a
+# matching version). See README.txt.

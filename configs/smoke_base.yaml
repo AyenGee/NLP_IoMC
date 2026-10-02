@@ -1,0 +1,37 @@
+# Fast CPU smoke test: base task (no collapse), no auxiliary heads.
+# Purpose: confirm the induction-head phase transition reproduces before
+# spending compute on the full collapse pipeline.
+task:
+  K: 32
+  L: 8
+  n_classes: 4
+  burstiness: 3
+  shuffle_context: true
+
+model:
+  d_model: 32
+  n_layers: 2
+  n_heads: 2
+  d_ff: 128
+  dropout: 0.0
+
+train:
+  lr: 0.001
+  weight_decay: 0.01
+  batch_size: 64
+  n_epochs: 40
+  warmup_steps: 50
+  grad_clip: 1.0
+  extended: false
+  aux_weight: 1.0
+  eval_every: 1
+  interp_every: 2
+  patience: null
+  seed: 0
+  device: cpu
+  n_train: 4000
+  n_val: 500
+  n_test: 500
+  data_seed: 0
+  log_path: results/logs/smoke_base.csv
+  ckpt_path: results/checkpoints/smoke_base.pt

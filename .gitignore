@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+results/checkpoints/*.pt
+results/checkpoints/**/*.pt
+# Collapse-run checkpoints and exact-dataset snapshots are large and fully
+# regenerable from run_config.json's fixed seeds + the code; keep the CSV/
+# JSON summaries (small, needed for the abstract's figures) tracked.
+results/collapse/**/*.pt
+*.egg-info/
+.DS_Store
+abstract/*.pdf
+abstract/*.aux
+abstract/*.log
+abstract/*.out
+abstract/*.bbl
+abstract/*.blg
+slurm/logs/*.out
+slurm/logs/*.err
+!slurm/logs/.gitkeep

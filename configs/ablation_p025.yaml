@@ -1,0 +1,47 @@
+# Experiment 5 (ablation, point 1/2): extended task, partial synthetic
+# replacement, p=0.25. Compare against extended_collapse.yaml (p=1.0) and
+# ablation_p05.yaml (p=0.5) to see how the mixing ratio modulates collapse
+# severity (Shumailov et al.'s partial- vs full-replacement framing).
+task:
+  K: 64
+  L: 8
+  n_classes: 4
+  burstiness: 3
+  shuffle_context: true
+
+model:
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_ff: 256
+  dropout: 0.0
+
+train:
+  lr: 0.001
+  weight_decay: 0.1
+  batch_size: 128
+  n_epochs: 80
+  warmup_steps: 100
+  grad_clip: 1.0
+  extended: true
+  aux_weight: 1.0
+  eval_every: 1
+  interp_every: 5
+  patience: 30
+  seed: 0
+  device: auto
+  n_train: 20000
+  n_val: 800
+  n_test: 800
+  data_seed: 0
+
+collapse:
+  n_generations: 10
+  p_synthetic: 0.25
+  pool_size: 20000
+  variant: extended
+  gen_batch_size: 256
+  temperature: 1.0
+  seed: 0
+
+run_name: ablation_p025
