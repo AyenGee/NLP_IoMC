@@ -10,7 +10,7 @@
 #   sbatch slurm/run_slow.slurm
 #
 #SBATCH --job-name=icl-slow
-#SBATCH --partition=<PARTITION>        # TODO: set after test_smoke.slurm succeeds; check TIMELIMIT via `sinfo`
+#SBATCH --partition=batch            # mscluster CPU partition: 6 CPUs / 30 GB per node, 1-day limit
 #SBATCH --array=6-8
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=4G
@@ -18,8 +18,8 @@
 #SBATCH --output=slurm/logs/%x_%A_%a.out
 #SBATCH --error=slurm/logs/%x_%A_%a.err
 
-module purge
-module load python/3.11   # TODO: must match slurm/setup_env.sh
+# No `module load`: mscluster's system python3 (3.14) is what .venv was
+# built from in slurm/setup_env.sh, and it is present on every compute node.
 source .venv/bin/activate
 
 # Match torch/BLAS thread count to the CPUs Slurm actually allocated (default is

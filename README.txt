@@ -174,19 +174,19 @@ Jobs run on compute nodes via a queue, never directly on the login node.
 See slurm/ for the job scripts used below.
 
     a) Connect and set up the environment (ONCE):
-         ssh <your-username>@<mscluster-login-host>     # from your onboarding details
-         git clone <this-repo-url>   (or scp/rsync this directory over)
+         ssh eazubuike@<mscluster-login-host>
+         mkdir -p ~/projects && cd ~/projects
+         git clone https://github.com/AyenGee/NLP_IoMC.git
          cd NLP_IoMC
          bash slurm/setup_env.sh
-       setup_env.sh prints available `python` modules and installs a CPU
-       build of torch by default -- edit the TODOs in the script if you
-       want a GPU build on a GPU partition instead.
+       setup_env.sh builds .venv from mscluster's system python3 (3.14.x;
+       no `module load` needed - the same interpreter exists on every
+       compute node) and installs a CPU build of torch.
 
-    b) Find a suitable partition:
-         sinfo
-       Note a CPU (or GPU) partition's name and its TIMELIMIT column, then
-       fill in `#SBATCH --partition=<PARTITION>` in EVERY slurm/*.slurm
-       file (they all have the same TODO).
+    b) Partition: every slurm/*.slurm uses `batch` (CPU-only; 6 CPUs and
+       30 GB per node, 1-day TIMELIMIT, usually many idle nodes). Every
+       job here requests <= 4 CPUs, 4 GB and 4 h, so all of them fit.
+       (`sinfo` shows the current partitions if this ever changes.)
 
     c) Test small first (HPC etiquette -- always do this before the real jobs):
          sbatch slurm/test_smoke.slurm
