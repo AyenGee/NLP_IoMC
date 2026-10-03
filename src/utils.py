@@ -39,7 +39,7 @@ class CSVLogger:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        os.makedirs(self.path.parent, exist_ok=True)
         self._fieldnames: list[str] | None = None
         if self.path.exists():
             self.path.unlink()
@@ -58,7 +58,7 @@ class CSVLogger:
 
 def save_json(obj, path: str | Path) -> None:
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(path.parent, exist_ok=True)
     with open(path, "w") as f:
         json.dump(obj, f, indent=2, default=str)
 

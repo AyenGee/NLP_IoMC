@@ -128,6 +128,89 @@ def distribution_stats(
     return stats, symbol_counts, label_counts
 
 
+def label_consistency_rate(items: list[dict]) -> float:
+    """Fraction of repeated symbol occurrences (across a set of items) whose
+    label matches that symbol's FIRST occurrence in the same context. 1.0
+    for well-formed real data by construction; below 1.0 means a context
+    gives the same symbol two different labels -- a structural corruption
+    that a model solving the task by induction cannot fit."""
+    total, consistent = 0, 0
+    for item in items:
+        first_label = {}
+        for s, l in zip(item["symbol_tokens"][:-1].tolist(), item["label_tokens"].tolist()):
+            if s not in first_label:
+                first_label[s] = l
+            else:
+                total += 1
+                consistent += int(l == first_label[s])
+    return consistent / total if total > 0 else float("nan")
+
+
+def structure_stats(items: list[dict], n_classes: int, burstiness: int) -> dict:
+    """Sequence-STRUCTURE statistics of a training pool, the things marginal
+    symbol/label usage entropy and KL cannot see. For real data every one of
+    these is exactly 1.0 by construction, so any shortfall is corruption
+    introduced by a generating model:
+
+      frac_distinct_ok     context has exactly `n_classes` distinct symbols
+      frac_repeats_ok      every distinct context symbol appears exactly `burstiness` times
+      frac_label_consistent  repeated occurrences of a symbol all carry its first label
+      frac_label_injective   distinct symbols carry distinct labels
+      frac_query_in_context  the query symbol occurs in the context
+      frac_query_label_ok    the query's target label equals the label its symbol
+                             carries in the context (among sequences where it occurs)
+      frac_fully_valid       all of the above hold simultaneously
+    """
+    n = len(items)
+    c = {k: 0 for k in ["distinct", "repeats", "consistent", "injective", "qin", "qok", "valid"]}
+    n_qin = 0
+    for item in items:
+        syms = item["symbol_tokens"][:-1].tolist()
+        labs = item["label_tokens"].tolist()
+        query = int(item["symbol_tokens"][-1])
+        first, counts = {}, {}
+        consistent = True
+        for s, l in zip(syms, labs):
+            counts[s] = counts.get(s, 0) + 1
+            if s not in first:
+                first[s] = l
+            elif first[s] != l:
+                consistent = False
+        distinct_ok = len(counts) == n_classes
+        repeats_ok = all(v == burstiness for v in counts.values())
+        injective = len(set(first.values())) == len(first)
+        q_in = query in first
+        q_ok = q_in and int(item["query_label"]) == first[query]
+        c["distinct"] += distinct_ok
+        c["repeats"] += repeats_ok
+        c["consistent"] += consistent
+        c["injective"] += injective
+        c["qin"] += q_in
+        n_qin += q_in
+        c["qok"] += q_ok
+        c["valid"] += distinct_ok and repeats_ok and consistent and injective and q_in and q_ok
+    return {
+        "frac_distinct_ok": c["distinct"] / n,
+        "frac_repeats_ok": c["repeats"] / n,
+        "frac_label_consistent": c["consistent"] / n,
+        "label_consistency_rate": label_consistency_rate(items),
+        "frac_label_injective": c["injective"] / n,
+        "frac_query_in_context": c["qin"] / n,
+        "frac_query_label_ok": (c["qok"] / n_qin) if n_qin else float("nan"),
+        "frac_fully_valid": c["valid"] / n,
+    }
+
+
+def pool_distinct_fraction(items: list[dict]) -> float:
+    """Fraction of a pool's sequences that are distinct (1.0 = no duplicates).
+    A with-replacement resample of a size-matched pool gives ~1 - 1/e = 0.63."""
+    seen = {
+        (tuple(it["symbol_tokens"].tolist()), tuple(it["label_tokens"].tolist()), int(it["query_label"]))
+        for it in items
+    }
+    return len(seen) / len(items)
+
+
 def perplexity(loss: float) -> float:
     return math.exp(min(loss, 20.0))
 

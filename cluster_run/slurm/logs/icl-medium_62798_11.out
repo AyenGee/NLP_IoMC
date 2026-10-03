@@ -1,0 +1,12 @@
+[array task 11/17] extended_collapse.yaml mode=collapse seed=2
+[extended_collapse_seed2 gen 0] test_acc=0.994 symbol_entropy=4.158 kl_vs_gen0=0.0000 induction_score=0.193
+[extended_collapse_seed2 gen 1] test_acc=0.999 symbol_entropy=4.158 kl_vs_gen0=0.0009 induction_score=0.251
+[extended_collapse_seed2 gen 2] test_acc=0.996 symbol_entropy=4.156 kl_vs_gen0=0.0020 induction_score=0.234
+[extended_collapse_seed2 gen 3] test_acc=0.321 symbol_entropy=4.155 kl_vs_gen0=0.0032 induction_score=0.148
+[extended_collapse_seed2 gen 4] test_acc=0.250 symbol_entropy=4.149 kl_vs_gen0=0.0102 induction_score=0.133
+[extended_collapse_seed2 gen 5] test_acc=0.224 symbol_entropy=4.145 kl_vs_gen0=0.0136 induction_score=0.130
+[extended_collapse_seed2 gen 6] test_acc=0.237 symbol_entropy=4.137 kl_vs_gen0=0.0218 induction_score=0.130
+[extended_collapse_seed2 gen 7] test_acc=0.211 symbol_entropy=4.134 kl_vs_gen0=0.0254 induction_score=0.131
+[extended_collapse_seed2 gen 8] test_acc=0.219 symbol_entropy=4.128 kl_vs_gen0=0.0314 induction_score=0.127
+[extended_collapse_seed2 gen 9] test_acc=0.205 symbol_entropy=4.123 kl_vs_gen0=0.0365 induction_score=0.127
+[array task 11] done: {'out_dir': 'results/collapse/extended_collapse_seed2'}

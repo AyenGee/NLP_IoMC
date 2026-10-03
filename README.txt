@@ -46,6 +46,12 @@ Expect training accuracy to jump from near-chance to ~100% around epoch
 8-14, with the printed induction score climbing well above its printed
 random-baseline value at the same point.
 
+For a fuller check of the whole pipeline (tiny configs, ~1-2 minutes, writes
+only to a temp directory, never to results/):
+
+    python tests/test_pipeline.py        # last line must be "FAILED: none"
+    sbatch slurm/test_pipeline.slurm     # same, on an mscluster compute node
+
 
 3. REPRODUCING EVERY EXPERIMENT / FIGURE IN THE ABSTRACT
 -----------------------------------------------------------
@@ -98,17 +104,35 @@ combinations you re-run.
 
 4. GENERATING THE FIGURES FROM RESULTS
 ------------------------------------------
-After Section 3's runs have produced results/, generate the figures used
-in the abstract (aggregated mean +- std across the 3 seeds for every
-quantitative trend/ablation figure):
+After Section 3's runs have produced results/ (for the reported run, the
+mscluster output was copied from cluster_run/ into results/; cluster_run/
+also keeps the raw Slurm logs, which are the provenance for the job IDs
+quoted in the abstract's supplementary material):
+
+    python experiments/analyze_results.py       # needs only the CSV/JSON files
+
+This is the script behind every number and the two main figures in the
+abstract. It writes results/analysis_summary.json (all quoted numbers),
+abstract/figures/fig_main.png and abstract/figures/fig_failure_map.png.
+Figures are drawn per seed, NOT as mean +- std: outcomes are bimodal (a
+generation's model either learns induction, ~100% accuracy, or fails to,
+~25%), so a mean describes no model that exists and its std band spills
+outside [0, 1].
+
+The qualitative figures (attention maps, embedding PCA) and the older
+mean +- std plots come from the second script, which needs the model
+checkpoints (*.pt) in results/:
 
     python experiments/make_figures.py          # local
     sbatch slurm/make_figures.slurm              # mscluster, after all 3 array jobs finish
 
-Writes PNGs to abstract/figures/: attention-map heatmaps (one representative
-seed), induction-score and distribution-drift trends across generations
-(mean +- std band across seeds), embedding PCA plots, and the mixing-ratio
-ablation comparison (mean +- std per p value).
+NOTE: the *.pt checkpoints and gen{g}_data.pt dataset snapshots stayed on the
+cluster when results were copied back (only CSV/JSON/PNG were retrieved), so
+make_figures.py cannot be re-run locally, and the per-head ablation
+(src/circuits.py) and data-property (src/attribution.py) analyses have not
+been applied to the collapse runs. Copy those files from the cluster
+(about 0.5 GB for all runs; extended_collapse and ablation_p05 are the
+informative ones) to run them.
 
 
 5. HARDWARE, RUNTIME, AND THE BASE VARIANT'S TRAINING DYNAMICS
@@ -216,6 +240,54 @@ See slurm/ for the job scripts used below.
        then pull results/ and abstract/figures/ back to your machine
        (scp/rsync) to finish writing the abstract.
 
+    g) FOLLOW-UP VALIDITY CHECKS (added after reading the first results; each
+       targets a specific weakness listed in the abstract's Limitations).
+       They write to NEW run names / new files, so nothing from step d) is
+       overwritten. Run in this order:
+
+       0. Get the new code onto the cluster (git pull), then:
+            python experiments/check_manifest.py     # every --array matches its group
+            sbatch slurm/test_smoke.slurm            # code changed since the last smoke test
+
+       1. Analyses of the EXISTING runs (cheap; they need the *.pt checkpoints
+          and gen*_data.pt snapshots that step d) left in results/ on the
+          cluster, so run them before deleting anything there):
+            sbatch slurm/run_circuit_analysis.slurm   # -> results/analysis/circuits_*.csv
+            python experiments/retrain_generation.py --list    # how many failing cases
+            sbatch slurm/run_retrain.slurm            # -> results/retrain/*.json,*.csv
+          - circuit analysis: best-single-head induction score, per-head and
+            per-layer ablation, and STRUCTURE statistics of every generation's
+            training pool (label consistency, repeat counts, ...). Tests whether
+            collapse is driven by structural corruption the marginal KL cannot see.
+          - retrain: retrains each failed generation with early stopping OFF.
+            Tests whether any "failure" was only a delayed transition.
+
+       2. New experiments (about 29 array tasks; none depends on another):
+            sbatch slurm/run_controls.slurm       #  9 tasks, ~1-2.5 h each
+            sbatch slurm/run_extra_medium.slurm   # 15 tasks, ~1-2.5 h each
+            sbatch slurm/run_extra_slow.slurm     #  5 tasks, ~3-4 h each
+          - controls: p=0 with resampling, p=0 without, and the main p=1.0
+            experiment without duplicate sequences. Tests whether the duplicate-
+            sequence resampling in generations >= 1 explains the faster learning
+            of later generations and/or the collapse itself.
+          - extra seeds: seeds 3-7 for the four collapse conditions, each with its
+            OWN real-data pool (data_seed = seed), giving 8 seeds per condition.
+          Every new run also logs, per generation, how many sequences in its
+          pool are distinct (pool_distinct_frac), pool structure statistics, and
+          the best single head's induction score.
+
+       3. Bring results back and analyse:
+            bash slurm/package_results.sh light       # a few MB: CSV/JSON/PNG + Slurm logs
+            scp <user>@<login-host>:<repo>/nlp_results_light.tar.gz .
+          then locally: unpack into the repo and run
+            python experiments/analyze_results.py
+          It discovers seeds and conditions automatically, so 8 seeds and the
+          control conditions are included with no changes. Then update the
+          abstract's numbers and Limitations to match: several sentences there
+          (failure counts, "3 seeds", the duplication caveat) are only true
+          for the first 18 runs.
+       ("full" instead of "light" also bundles every *.pt, ~0.5 GB or more.)
+
 Etiquette reminders (from the cluster's own onboarding material): never
 run real computation on the login node, request only the resources you
 need, test small before scaling up, and clean up files you don't need.
@@ -234,9 +306,14 @@ need, test small before scaling up, and clean up files you don't need.
       metrics.py       loss/accuracy/perplexity/entropy/distribution-drift utilities
       utils.py         seeding, config loading, CSV/JSON logging
     configs/          one YAML config per experiment (see Section 3)
-    experiments/      manifest.py (experiment x seed list), run_experiment.py,
-                      run_array_task.py, run_all.py, make_figures.py
-    slurm/            mscluster job scripts (see Section 6) + slurm/logs/
+    experiments/      manifest.py (named job groups), run_experiment.py,
+                      run_array_task.py, run_all.py, check_manifest.py,
+                      analyze_results.py (all report numbers + main figures),
+                      analyze_circuits.py (per-head ablation + pool structure),
+                      retrain_generation.py (failed generations, no early stop),
+                      make_figures.py (attention maps / PCA from checkpoints)
+    slurm/            mscluster job scripts (see Section 6), package_results.sh,
+                      slurm/logs/
     results/          logs (CSV), checkpoints, collapse-run data/models, figures
     abstract/         extended abstract (main.tex, CCN 2-page format) + figures/
     ethics/           NeurIPS 2024 ethics checklist (placeholder, see file) +

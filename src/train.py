@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import math
+import os
 import time
 from pathlib import Path
 
@@ -94,11 +95,20 @@ def interp_snapshot(model, loader, device) -> dict:
     ent = attention_entropy(out.attn_maps)
     ind = induction_score(out.attn_maps, batch["symbol_tokens"])
     prev = prev_token_score(out.attn_maps)
+    def best_head(scores: dict) -> float:
+        # Per-head entries are keyed 'layer{l}_head{h}'; the other keys are aggregates.
+        return max(v for k, v in scores.items() if "_head" in k)
+
     return {
         "attn_entropy_mean": ent["overall_mean"],
         "induction_score_mean": ind["overall_mean"],
         "induction_score_baseline": ind["baseline_mean"],
         "prev_token_score_mean": prev["overall_mean"],
+        # The mean over all heads is diluted by heads that play no part in the
+        # circuit; the best single head is the better 'is there an induction
+        # head' signal (added after the first 18 runs, so absent from those logs).
+        "induction_score_max": best_head(ind),
+        "prev_token_score_max": best_head(prev),
     }
 
 
@@ -217,7 +227,7 @@ def train_model(
 
     if train_cfg.ckpt_path:
         ckpt_path = Path(train_cfg.ckpt_path)
-        ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+        os.makedirs(ckpt_path.parent, exist_ok=True)  # race-safe under parallel Slurm array tasks
         torch.save(
             {
                 "model_state": model.state_dict(),

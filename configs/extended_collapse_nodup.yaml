@@ -1,0 +1,53 @@
+# CONTROL: the main extended p=1.0 experiment (extended_collapse.yaml) with
+# with_replacement=false, so each generation's pool is the 20,000 DISTINCT
+# sequences its predecessor sampled, instead of a bootstrap resample of them
+# (~63% distinct). Everything else is identical to extended_collapse.yaml.
+#
+# Question it answers: does the abrupt, absorbing collapse (22/27 failures)
+# depend on duplicate sequences in the training pool? Duplication makes
+# memorisation easier, so if the collapse were an artifact of resampling, it
+# should weaken or vanish here. If it persists, resampling is not the cause.
+task:
+  K: 64
+  L: 8
+  n_classes: 4
+  burstiness: 3
+  shuffle_context: true
+
+model:
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_ff: 256
+  dropout: 0.0
+
+train:
+  lr: 0.001
+  weight_decay: 0.1
+  batch_size: 128
+  n_epochs: 80
+  warmup_steps: 100
+  grad_clip: 1.0
+  extended: true
+  aux_weight: 1.0
+  eval_every: 1
+  interp_every: 5
+  patience: 30
+  seed: 0
+  device: auto
+  n_train: 20000
+  n_val: 800
+  n_test: 800
+  data_seed: 0
+
+collapse:
+  n_generations: 10
+  p_synthetic: 1.0
+  pool_size: 20000
+  variant: extended
+  gen_batch_size: 256
+  temperature: 1.0
+  seed: 0
+  with_replacement: false
+
+run_name: extended_collapse_nodup

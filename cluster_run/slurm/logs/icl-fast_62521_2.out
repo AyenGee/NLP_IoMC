@@ -1,0 +1,103 @@
+[array task 2/17] base_no_collapse.yaml mode=train seed=2
+epoch   0 | train_loss 1.7424 acc 0.237 | val_loss 1.5602 acc 0.230 | ind_score 0.189 (base 0.120)
+epoch   1 | train_loss 1.5104 acc 0.265 | val_loss 1.5105 acc 0.241
+epoch   2 | train_loss 1.4549 acc 0.271 | val_loss 1.4420 acc 0.242
+epoch   3 | train_loss 1.4252 acc 0.275 | val_loss 1.4805 acc 0.251
+epoch   4 | train_loss 1.4110 acc 0.283 | val_loss 1.4244 acc 0.273
+epoch   5 | train_loss 1.3988 acc 0.291 | val_loss 1.4283 acc 0.249 | ind_score 0.205 (base 0.120)
+epoch   6 | train_loss 1.3897 acc 0.303 | val_loss 1.4468 acc 0.256
+epoch   7 | train_loss 1.3809 acc 0.318 | val_loss 1.4304 acc 0.245
+epoch   8 | train_loss 1.3689 acc 0.331 | val_loss 1.4342 acc 0.278
+epoch   9 | train_loss 1.3446 acc 0.352 | val_loss 1.3602 acc 0.331
+epoch  10 | train_loss 0.8573 acc 0.627 | val_loss 0.3116 acc 0.877 | ind_score 0.474 (base 0.120)
+epoch  11 | train_loss 0.1597 acc 0.939 | val_loss 0.0557 acc 0.984
+epoch  12 | train_loss 0.0342 acc 0.991 | val_loss 0.0326 acc 0.988
+epoch  13 | train_loss 0.0185 acc 0.995 | val_loss 0.0253 acc 0.994
+epoch  14 | train_loss 0.0058 acc 0.999 | val_loss 0.0055 acc 0.999
+epoch  15 | train_loss 0.0092 acc 0.997 | val_loss 0.0225 acc 0.995 | ind_score 0.541 (base 0.120)
+epoch  16 | train_loss 0.0124 acc 0.997 | val_loss 0.0099 acc 0.998
+epoch  17 | train_loss 0.0035 acc 0.999 | val_loss 0.0018 acc 1.000
+epoch  18 | train_loss 0.0040 acc 0.999 | val_loss 0.0174 acc 0.996
+epoch  19 | train_loss 0.0029 acc 0.999 | val_loss 0.0013 acc 1.000
+epoch  20 | train_loss 0.0070 acc 0.998 | val_loss 0.0118 acc 0.996 | ind_score 0.540 (base 0.120)
+epoch  21 | train_loss 0.0068 acc 0.998 | val_loss 0.0032 acc 1.000
+epoch  22 | train_loss 0.0030 acc 0.999 | val_loss 0.0163 acc 0.994
+epoch  23 | train_loss 0.0048 acc 0.999 | val_loss 0.0009 acc 1.000
+epoch  24 | train_loss 0.0008 acc 1.000 | val_loss 0.0007 acc 1.000
+epoch  25 | train_loss 0.0007 acc 1.000 | val_loss 0.0007 acc 1.000 | ind_score 0.538 (base 0.120)
+epoch  26 | train_loss 0.0007 acc 1.000 | val_loss 0.0007 acc 1.000
+epoch  27 | train_loss 0.0006 acc 1.000 | val_loss 0.0007 acc 1.000
+epoch  28 | train_loss 0.0006 acc 1.000 | val_loss 0.0006 acc 1.000
+epoch  29 | train_loss 0.0006 acc 1.000 | val_loss 0.0006 acc 1.000
+epoch  30 | train_loss 0.0006 acc 1.000 | val_loss 0.0006 acc 1.000 | ind_score 0.518 (base 0.120)
+epoch  31 | train_loss 0.0005 acc 1.000 | val_loss 0.0005 acc 1.000
+epoch  32 | train_loss 0.0005 acc 1.000 | val_loss 0.0005 acc 1.000
+epoch  33 | train_loss 0.0005 acc 1.000 | val_loss 0.0005 acc 1.000
+epoch  34 | train_loss 0.0004 acc 1.000 | val_loss 0.0004 acc 1.000
+epoch  35 | train_loss 0.0004 acc 1.000 | val_loss 0.0004 acc 1.000 | ind_score 0.499 (base 0.120)
+epoch  36 | train_loss 0.0004 acc 1.000 | val_loss 0.0004 acc 1.000
+epoch  37 | train_loss 0.0003 acc 1.000 | val_loss 0.0004 acc 1.000
+epoch  38 | train_loss 0.0003 acc 1.000 | val_loss 0.0003 acc 1.000
+epoch  39 | train_loss 0.0003 acc 1.000 | val_loss 0.0003 acc 1.000
+epoch  40 | train_loss 0.0003 acc 1.000 | val_loss 0.0003 acc 1.000 | ind_score 0.483 (base 0.120)
+epoch  41 | train_loss 0.0002 acc 1.000 | val_loss 0.0003 acc 1.000
+epoch  42 | train_loss 0.0002 acc 1.000 | val_loss 0.0002 acc 1.000
+epoch  43 | train_loss 0.0002 acc 1.000 | val_loss 0.0002 acc 1.000
+epoch  44 | train_loss 0.0002 acc 1.000 | val_loss 0.0002 acc 1.000
+epoch  45 | train_loss 0.0002 acc 1.000 | val_loss 0.0002 acc 1.000 | ind_score 0.465 (base 0.120)
+epoch  46 | train_loss 0.0002 acc 1.000 | val_loss 0.0002 acc 1.000
+epoch  47 | train_loss 0.0002 acc 1.000 | val_loss 0.0002 acc 1.000
+epoch  48 | train_loss 0.0001 acc 1.000 | val_loss 0.0002 acc 1.000
+epoch  49 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  50 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000 | ind_score 0.445 (base 0.120)
+epoch  51 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  52 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  53 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  54 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  55 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000 | ind_score 0.427 (base 0.120)
+epoch  56 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  57 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  58 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  59 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  60 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000 | ind_score 0.411 (base 0.120)
+epoch  61 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  62 | train_loss 0.0001 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  63 | train_loss 0.0000 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  64 | train_loss 0.0000 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  65 | train_loss 0.0000 acc 1.000 | val_loss 0.0001 acc 1.000 | ind_score 0.398 (base 0.120)
+epoch  66 | train_loss 0.0000 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  67 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  68 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  69 | train_loss 0.0000 acc 1.000 | val_loss 0.0001 acc 1.000
+epoch  70 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.388 (base 0.120)
+epoch  71 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  72 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  73 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  74 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  75 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.381 (base 0.120)
+epoch  76 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  77 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  78 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  79 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  80 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.377 (base 0.120)
+epoch  81 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  82 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  83 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  84 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  85 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.375 (base 0.120)
+epoch  86 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  87 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  88 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  89 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  90 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.375 (base 0.120)
+epoch  91 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  92 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  93 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  94 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  95 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.375 (base 0.120)
+epoch  96 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  97 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  98 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000
+epoch  99 | train_loss 0.0000 acc 1.000 | val_loss 0.0000 acc 1.000 | ind_score 0.375 (base 0.120)
+Test: loss 0.0000 acc 1.000 ppl 1.00
+[array task 2] done: {'test_loss': 1.5910193214949687e-05, 'test_acc': 1.0, 'test_ppl': 1.0000159103197828, 'best_val_loss': 1.3605448912130668e-05, 'n_epochs_run': 100, 'train_seconds': 209.93510913848877}

@@ -1,0 +1,54 @@
+# CONTROL for the duplication confound: p=0.0, i.e. NO synthetic data at all.
+# Every generation >= 1 trains on a with-replacement resample of a fresh REAL
+# pool (~63% distinct sequences), exactly the resampling the p>0 runs apply
+# to their real part. Generation 0 uses a fully distinct pool. Everything else
+# is identical to extended_collapse.yaml.
+#
+# Question it answers: do later generations learn induction faster than
+# generation 0 (median epoch-to-90% ~4-9 vs ~19) because of RESAMPLING alone,
+# with no synthetic content involved? If yes, the speed-up is a resampling
+# artifact, not a property of synthetic data. Expect no failures here.
+task:
+  K: 64
+  L: 8
+  n_classes: 4
+  burstiness: 3
+  shuffle_context: true
+
+model:
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_ff: 256
+  dropout: 0.0
+
+train:
+  lr: 0.001
+  weight_decay: 0.1
+  batch_size: 128
+  n_epochs: 80
+  warmup_steps: 100
+  grad_clip: 1.0
+  extended: true
+  aux_weight: 1.0
+  eval_every: 1
+  interp_every: 5
+  patience: 30
+  seed: 0
+  device: auto
+  n_train: 20000
+  n_val: 800
+  n_test: 800
+  data_seed: 0
+
+collapse:
+  n_generations: 10
+  p_synthetic: 0.0
+  pool_size: 20000
+  variant: extended
+  gen_batch_size: 256
+  temperature: 1.0
+  seed: 0
+  with_replacement: true
+
+run_name: control_real_resampled

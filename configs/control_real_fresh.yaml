@@ -1,0 +1,55 @@
+# CONTROL, companion to control_real_resampled.yaml: p=0.0 and
+# with_replacement=false, so every generation trains on a fresh, fully
+# DISTINCT real pool of the same size and kind as generation 0's. Only the
+# model-init seed is shared across generations. Everything else is identical
+# to extended_collapse.yaml.
+#
+# Question it answers: is a generation >= 1 pool of fresh real data any
+# different, dynamically, from generation 0's pool? Compared with
+# control_real_resampled.yaml it separates "resampling with duplicates" from
+# "just a different draw of real data". Expect no failures and epoch-to-90%
+# similar to generation 0 (~19) if duplication is the cause of the speed-up.
+task:
+  K: 64
+  L: 8
+  n_classes: 4
+  burstiness: 3
+  shuffle_context: true
+
+model:
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_ff: 256
+  dropout: 0.0
+
+train:
+  lr: 0.001
+  weight_decay: 0.1
+  batch_size: 128
+  n_epochs: 80
+  warmup_steps: 100
+  grad_clip: 1.0
+  extended: true
+  aux_weight: 1.0
+  eval_every: 1
+  interp_every: 5
+  patience: 30
+  seed: 0
+  device: auto
+  n_train: 20000
+  n_val: 800
+  n_test: 800
+  data_seed: 0
+
+collapse:
+  n_generations: 10
+  p_synthetic: 0.0
+  pool_size: 20000
+  variant: extended
+  gen_batch_size: 256
+  temperature: 1.0
+  seed: 0
+  with_replacement: false
+
+run_name: control_real_fresh

@@ -1,0 +1,10 @@
+{
+  "test_loss": 5.488746967315674,
+  "test_acc": 0.2025,
+  "test_ppl": 241.95384076325615,
+  "best_val_loss": 1.8812622928619385,
+  "n_epochs_run": 31,
+  "train_seconds": 67.8474817276001,
+  "test_aux_label_acc": 0.16187500238418578,
+  "test_aux_symbol_acc": 0.15187500059604644
+}

@@ -19,3 +19,9 @@ abstract/*.blg
 slurm/logs/*.out
 slurm/logs/*.err
 !slurm/logs/.gitkeep
+
+# raw cluster archive duplicates results/ (kept locally; Slurm logs under cluster_run/ stay tracked)
+cluster_run/*.tar.gz
+
+# bundles created by slurm/package_results.sh
+nlp_results_*.tar.gz

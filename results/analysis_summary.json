@@ -1,0 +1,866 @@
+{
+  "sanity_no_collapse": {
+    "base_no_collapse": {
+      "0": {
+        "test_acc": 1.0,
+        "test_loss": 3.095425130595686e-05,
+        "epochs_run": 100,
+        "first_epoch_val_acc_gt_0.9": 10,
+        "final_induction_score": 0.45218668691813946,
+        "final_prev_token_score": 0.17510432191193104,
+        "induction_baseline": 0.11999999731779099,
+        "test_aux_label_acc": null,
+        "test_aux_symbol_acc": null
+      },
+      "1": {
+        "test_acc": 1.0,
+        "test_loss": 5.3473227453650906e-05,
+        "epochs_run": 100,
+        "first_epoch_val_acc_gt_0.9": 23,
+        "final_induction_score": 0.24147570598870516,
+        "final_prev_token_score": 0.159530489705503,
+        "induction_baseline": 0.11999999731779099,
+        "test_aux_label_acc": null,
+        "test_aux_symbol_acc": null
+      },
+      "2": {
+        "test_acc": 1.0,
+        "test_loss": 1.5910193214949687e-05,
+        "epochs_run": 100,
+        "first_epoch_val_acc_gt_0.9": 11,
+        "final_induction_score": 0.37461774703115225,
+        "final_prev_token_score": 0.16978768352419138,
+        "induction_baseline": 0.11999999731779099,
+        "test_aux_label_acc": null,
+        "test_aux_symbol_acc": null
+      }
+    },
+    "extended_no_collapse": {
+      "0": {
+        "test_acc": 0.99375,
+        "test_loss": 0.021432698145508765,
+        "epochs_run": 80,
+        "first_epoch_val_acc_gt_0.9": 19,
+        "final_induction_score": 0.19578760095440312,
+        "final_prev_token_score": 0.19212771102320403,
+        "induction_baseline": 0.11999999731779099,
+        "test_aux_label_acc": 0.7128125,
+        "test_aux_symbol_acc": 0.3058333349227905
+      },
+      "1": {
+        "test_acc": 0.99875,
+        "test_loss": 0.003547925512539223,
+        "epochs_run": 59,
+        "first_epoch_val_acc_gt_0.9": 12,
+        "final_induction_score": 0.3472589529119432,
+        "final_prev_token_score": 0.19544166373088956,
+        "induction_baseline": 0.11999999731779099,
+        "test_aux_label_acc": 0.7194791674613953,
+        "test_aux_symbol_acc": 0.3152083313465118
+      },
+      "2": {
+        "test_acc": 0.99375,
+        "test_loss": 0.01964359886944294,
+        "epochs_run": 80,
+        "first_epoch_val_acc_gt_0.9": 28,
+        "final_induction_score": 0.1932579013518989,
+        "final_prev_token_score": 0.16999720130115747,
+        "induction_baseline": 0.11999999731779099,
+        "test_aux_label_acc": 0.7104166626930237,
+        "test_aux_symbol_acc": 0.35760417103767395
+      }
+    }
+  },
+  "collapse": {
+    "extended_collapse": {
+      "n_generations": 10,
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "test_acc_by_seed": {
+        "0": [
+          0.9938,
+          0.9975,
+          0.9788,
+          0.9275,
+          0.2562,
+          0.235,
+          0.2088,
+          0.2312,
+          0.2062,
+          0.2062
+        ],
+        "1": [
+          0.9988,
+          0.2537,
+          0.2238,
+          0.2112,
+          0.1938,
+          0.2225,
+          0.2188,
+          0.2037,
+          0.2025,
+          0.1988
+        ],
+        "2": [
+          0.9938,
+          0.9988,
+          0.9962,
+          0.3212,
+          0.25,
+          0.2238,
+          0.2375,
+          0.2112,
+          0.2188,
+          0.205
+        ]
+      },
+      "failed_trainings_gen_ge1": 22,
+      "n_trainings_gen_ge1": 27,
+      "seeds_with_any_failure": [
+        0,
+        1,
+        2
+      ],
+      "first_failure_gen_by_seed": {
+        "0": 4,
+        "1": 1,
+        "2": 3
+      },
+      "final_gen_acc_by_seed": {
+        "0": 0.2062,
+        "1": 0.1988,
+        "2": 0.205
+      },
+      "recovered_after_failure_by_seed": {
+        "0": false,
+        "1": false,
+        "2": false
+      },
+      "test_loss_gen0_mean": 0.01487,
+      "test_loss_final_mean": 5.73256,
+      "test_loss_by_gen_mean": [
+        0.01487,
+        1.11472,
+        1.33817,
+        2.68845,
+        4.28282,
+        4.6874,
+        5.02302,
+        5.3268,
+        5.50258,
+        5.73256
+      ],
+      "induction_score_mean_gen0_mean": 0.24525,
+      "induction_score_mean_final_mean": 0.12846,
+      "induction_score_mean_by_gen_mean": [
+        0.24525,
+        0.2303,
+        0.2148,
+        0.169,
+        0.13288,
+        0.13335,
+        0.13021,
+        0.13157,
+        0.13028,
+        0.12846
+      ],
+      "prev_token_score_mean_gen0_mean": 0.18548,
+      "prev_token_score_mean_final_mean": 0.13879,
+      "prev_token_score_mean_by_gen_mean": [
+        0.18548,
+        0.18929,
+        0.17586,
+        0.1508,
+        0.13558,
+        0.13934,
+        0.13857,
+        0.14017,
+        0.1386,
+        0.13879
+      ],
+      "attn_entropy_mean_gen0_mean": 1.33015,
+      "attn_entropy_mean_final_mean": 2.00112,
+      "attn_entropy_mean_by_gen_mean": [
+        1.33015,
+        1.40251,
+        1.55817,
+        1.82345,
+        1.86712,
+        1.91445,
+        1.93896,
+        1.96279,
+        1.97963,
+        2.00112
+      ],
+      "symbol_entropy_gen0_mean": 4.15848,
+      "symbol_entropy_final_mean": 4.11475,
+      "symbol_entropy_by_gen_mean": [
+        4.15848,
+        4.15715,
+        4.15318,
+        4.15032,
+        4.14646,
+        4.14128,
+        4.13323,
+        4.13154,
+        4.12358,
+        4.11475
+      ],
+      "symbol_kl_vs_gen0_gen0_mean": 0.0,
+      "symbol_kl_vs_gen0_final_mean": 0.04372,
+      "symbol_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.00152,
+        0.00544,
+        0.00833,
+        0.01219,
+        0.01707,
+        0.02512,
+        0.02686,
+        0.03508,
+        0.04372
+      ],
+      "label_kl_vs_gen0_gen0_mean": 0.0,
+      "label_kl_vs_gen0_final_mean": 0.01994,
+      "label_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.00054,
+        0.00292,
+        0.00725,
+        0.01021,
+        0.01265,
+        0.01542,
+        0.02024,
+        0.02327,
+        0.01994
+      ],
+      "induction_score_baseline_gen0_mean": 0.12,
+      "induction_score_baseline_final_mean": 0.12,
+      "induction_score_baseline_by_gen_mean": [
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12
+      ],
+      "diagnostics": {
+        "failed": {
+          "n": 22,
+          "mean_train_acc_final": 0.9571,
+          "mean_max_val_acc": 0.2682,
+          "mean_epochs": 31.5
+        },
+        "ok": {
+          "n": 5,
+          "mean_train_acc_final": 1.0,
+          "mean_max_val_acc": 0.992,
+          "mean_epochs": 74.0
+        }
+      },
+      "median_epoch_to_val90_gen0": 19.0,
+      "median_epoch_to_val90_healthy_gen_ge1": 9.0
+    },
+    "ablation_p05": {
+      "n_generations": 10,
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "test_acc_by_seed": {
+        "0": [
+          0.9938,
+          0.995,
+          1.0,
+          1.0,
+          1.0,
+          0.9962,
+          1.0,
+          0.9988,
+          0.9988,
+          1.0
+        ],
+        "1": [
+          0.9988,
+          0.3675,
+          0.94,
+          0.2612,
+          0.2612,
+          0.2612,
+          0.3113,
+          0.8988,
+          0.9112,
+          0.245
+        ],
+        "2": [
+          0.9938,
+          1.0,
+          1.0,
+          0.9988,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "failed_trainings_gen_ge1": 6,
+      "n_trainings_gen_ge1": 27,
+      "seeds_with_any_failure": [
+        1
+      ],
+      "first_failure_gen_by_seed": {
+        "0": null,
+        "1": 1,
+        "2": null
+      },
+      "final_gen_acc_by_seed": {
+        "0": 1.0,
+        "1": 0.245,
+        "2": 1.0
+      },
+      "recovered_after_failure_by_seed": {
+        "0": false,
+        "1": true,
+        "2": false
+      },
+      "test_loss_gen0_mean": 0.01487,
+      "test_loss_final_mean": 0.84673,
+      "test_loss_by_gen_mean": [
+        0.01487,
+        0.63773,
+        0.06731,
+        0.93825,
+        0.84154,
+        0.82829,
+        0.8606,
+        0.1445,
+        0.13353,
+        0.84673
+      ],
+      "induction_score_mean_gen0_mean": 0.24525,
+      "induction_score_mean_final_mean": 0.23154,
+      "induction_score_mean_by_gen_mean": [
+        0.24525,
+        0.21207,
+        0.23345,
+        0.20925,
+        0.1854,
+        0.2056,
+        0.24042,
+        0.26292,
+        0.32986,
+        0.23154
+      ],
+      "prev_token_score_mean_gen0_mean": 0.18548,
+      "prev_token_score_mean_final_mean": 0.18433,
+      "prev_token_score_mean_by_gen_mean": [
+        0.18548,
+        0.19154,
+        0.18882,
+        0.19631,
+        0.19562,
+        0.18534,
+        0.19014,
+        0.19394,
+        0.21004,
+        0.18433
+      ],
+      "attn_entropy_mean_gen0_mean": 1.33015,
+      "attn_entropy_mean_final_mean": 1.55258,
+      "attn_entropy_mean_by_gen_mean": [
+        1.33015,
+        1.51555,
+        1.467,
+        1.51303,
+        1.52537,
+        1.45238,
+        1.47519,
+        1.48809,
+        1.47013,
+        1.55258
+      ],
+      "symbol_entropy_gen0_mean": 4.15848,
+      "symbol_entropy_final_mean": 4.15816,
+      "symbol_entropy_by_gen_mean": [
+        4.15848,
+        4.15799,
+        4.1577,
+        4.15781,
+        4.15791,
+        4.15761,
+        4.15736,
+        4.15774,
+        4.15775,
+        4.15816
+      ],
+      "symbol_kl_vs_gen0_gen0_mean": 0.0,
+      "symbol_kl_vs_gen0_final_mean": 0.00116,
+      "symbol_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.00104,
+        0.00145,
+        0.00149,
+        0.00141,
+        0.00159,
+        0.00178,
+        0.00149,
+        0.00148,
+        0.00116
+      ],
+      "label_kl_vs_gen0_gen0_mean": 0.0,
+      "label_kl_vs_gen0_final_mean": 0.00027,
+      "label_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.00016,
+        0.00035,
+        0.00029,
+        0.0005,
+        0.0002,
+        0.00043,
+        0.00087,
+        0.00068,
+        0.00027
+      ],
+      "induction_score_baseline_gen0_mean": 0.12,
+      "induction_score_baseline_final_mean": 0.12,
+      "induction_score_baseline_by_gen_mean": [
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12
+      ],
+      "diagnostics": {
+        "failed": {
+          "n": 6,
+          "mean_train_acc_final": 0.8127,
+          "mean_max_val_acc": 0.2902,
+          "mean_epochs": 35.3
+        },
+        "ok": {
+          "n": 21,
+          "mean_train_acc_final": 0.9999,
+          "mean_max_val_acc": 0.9893,
+          "mean_epochs": 72.7
+        }
+      },
+      "median_epoch_to_val90_gen0": 19.0,
+      "median_epoch_to_val90_healthy_gen_ge1": 4.0
+    },
+    "ablation_p025": {
+      "n_generations": 10,
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "test_acc_by_seed": {
+        "0": [
+          0.9938,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9975
+        ],
+        "1": [
+          0.9988,
+          1.0,
+          1.0,
+          0.2575,
+          0.9688,
+          0.9862,
+          0.9975,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "2": [
+          0.9938,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "failed_trainings_gen_ge1": 1,
+      "n_trainings_gen_ge1": 27,
+      "seeds_with_any_failure": [
+        1
+      ],
+      "first_failure_gen_by_seed": {
+        "0": null,
+        "1": 3,
+        "2": null
+      },
+      "final_gen_acc_by_seed": {
+        "0": 0.9975,
+        "1": 1.0,
+        "2": 1.0
+      },
+      "recovered_after_failure_by_seed": {
+        "0": false,
+        "1": true,
+        "2": false
+      },
+      "test_loss_gen0_mean": 0.01487,
+      "test_loss_final_mean": 0.00298,
+      "test_loss_by_gen_mean": [
+        0.01487,
+        0.00091,
+        0.00085,
+        0.82307,
+        0.03745,
+        0.01469,
+        0.00557,
+        0.00056,
+        0.00098,
+        0.00298
+      ],
+      "induction_score_mean_gen0_mean": 0.24525,
+      "induction_score_mean_final_mean": 0.23353,
+      "induction_score_mean_by_gen_mean": [
+        0.24525,
+        0.26245,
+        0.27596,
+        0.26445,
+        0.23489,
+        0.25933,
+        0.26659,
+        0.25565,
+        0.30091,
+        0.23353
+      ],
+      "prev_token_score_mean_gen0_mean": 0.18548,
+      "prev_token_score_mean_final_mean": 0.19144,
+      "prev_token_score_mean_by_gen_mean": [
+        0.18548,
+        0.20231,
+        0.20476,
+        0.19299,
+        0.18798,
+        0.20018,
+        0.19362,
+        0.19494,
+        0.20339,
+        0.19144
+      ],
+      "attn_entropy_mean_gen0_mean": 1.33015,
+      "attn_entropy_mean_final_mean": 1.54218,
+      "attn_entropy_mean_by_gen_mean": [
+        1.33015,
+        1.4526,
+        1.49593,
+        1.45647,
+        1.53603,
+        1.38292,
+        1.39551,
+        1.51779,
+        1.50252,
+        1.54218
+      ],
+      "symbol_entropy_gen0_mean": 4.15848,
+      "symbol_entropy_final_mean": 4.15825,
+      "symbol_entropy_by_gen_mean": [
+        4.15848,
+        4.15821,
+        4.1581,
+        4.15824,
+        4.15802,
+        4.15818,
+        4.1582,
+        4.15829,
+        4.15819,
+        4.15825
+      ],
+      "symbol_kl_vs_gen0_gen0_mean": 0.0,
+      "symbol_kl_vs_gen0_final_mean": 0.00108,
+      "symbol_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.00101,
+        0.00101,
+        0.00088,
+        0.00118,
+        0.00104,
+        0.00098,
+        0.00115,
+        0.00109,
+        0.00108
+      ],
+      "label_kl_vs_gen0_gen0_mean": 0.0,
+      "label_kl_vs_gen0_final_mean": 5e-05,
+      "label_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        8e-05,
+        4e-05,
+        0.0001,
+        0.00013,
+        7e-05,
+        4e-05,
+        9e-05,
+        5e-05,
+        5e-05
+      ],
+      "induction_score_baseline_gen0_mean": 0.12,
+      "induction_score_baseline_final_mean": 0.12,
+      "induction_score_baseline_by_gen_mean": [
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12
+      ],
+      "diagnostics": {
+        "failed": {
+          "n": 1,
+          "mean_train_acc_final": 0.8111,
+          "mean_max_val_acc": 0.2725,
+          "mean_epochs": 37.0
+        },
+        "ok": {
+          "n": 26,
+          "mean_train_acc_final": 1.0,
+          "mean_max_val_acc": 0.9986,
+          "mean_epochs": 75.6
+        }
+      },
+      "median_epoch_to_val90_gen0": 19.0,
+      "median_epoch_to_val90_healthy_gen_ge1": 4.0
+    },
+    "base_collapse": {
+      "n_generations": 10,
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "test_acc_by_seed": {
+        "0": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "1": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.2412,
+          0.26
+        ],
+        "2": [
+          1.0,
+          1.0,
+          0.9962,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "failed_trainings_gen_ge1": 2,
+      "n_trainings_gen_ge1": 27,
+      "seeds_with_any_failure": [
+        1
+      ],
+      "first_failure_gen_by_seed": {
+        "0": null,
+        "1": 8,
+        "2": null
+      },
+      "final_gen_acc_by_seed": {
+        "0": 1.0,
+        "1": 0.26,
+        "2": 1.0
+      },
+      "recovered_after_failure_by_seed": {
+        "0": false,
+        "1": false,
+        "2": false
+      },
+      "test_loss_gen0_mean": 3e-05,
+      "test_loss_final_mean": 1.234,
+      "test_loss_by_gen_mean": [
+        3e-05,
+        5e-05,
+        0.00682,
+        0.00018,
+        0.00014,
+        0.00025,
+        0.00013,
+        3e-05,
+        1.17769,
+        1.234
+      ],
+      "induction_score_mean_gen0_mean": 0.35609,
+      "induction_score_mean_final_mean": 0.35416,
+      "induction_score_mean_by_gen_mean": [
+        0.35609,
+        0.47845,
+        0.39433,
+        0.43477,
+        0.44625,
+        0.44173,
+        0.48034,
+        0.38089,
+        0.37248,
+        0.35416
+      ],
+      "prev_token_score_mean_gen0_mean": 0.16814,
+      "prev_token_score_mean_final_mean": 0.16677,
+      "prev_token_score_mean_by_gen_mean": [
+        0.16814,
+        0.18418,
+        0.14357,
+        0.17306,
+        0.17791,
+        0.17757,
+        0.18923,
+        0.16285,
+        0.15778,
+        0.16677
+      ],
+      "attn_entropy_mean_gen0_mean": 2.03624,
+      "attn_entropy_mean_final_mean": 1.84636,
+      "attn_entropy_mean_by_gen_mean": [
+        2.03624,
+        1.84594,
+        2.05006,
+        1.97172,
+        1.91663,
+        1.91029,
+        1.87485,
+        2.08493,
+        1.8048,
+        1.84636
+      ],
+      "symbol_entropy_gen0_mean": 4.15848,
+      "symbol_entropy_final_mean": 4.15806,
+      "symbol_entropy_by_gen_mean": [
+        4.15848,
+        4.15808,
+        4.15816,
+        4.15799,
+        4.15827,
+        4.15794,
+        4.15815,
+        4.15819,
+        4.15804,
+        4.15806
+      ],
+      "symbol_kl_vs_gen0_gen0_mean": 0.0,
+      "symbol_kl_vs_gen0_final_mean": 0.0012,
+      "symbol_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.00124,
+        0.00111,
+        0.00141,
+        0.001,
+        0.00122,
+        0.00126,
+        0.00107,
+        0.00132,
+        0.0012
+      ],
+      "label_kl_vs_gen0_gen0_mean": 0.0,
+      "label_kl_vs_gen0_final_mean": 5e-05,
+      "label_kl_vs_gen0_by_gen_mean": [
+        0.0,
+        0.0001,
+        5e-05,
+        5e-05,
+        3e-05,
+        0.0001,
+        8e-05,
+        0.00012,
+        8e-05,
+        5e-05
+      ],
+      "induction_score_baseline_gen0_mean": 0.12,
+      "induction_score_baseline_final_mean": 0.12,
+      "induction_score_baseline_by_gen_mean": [
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12
+      ],
+      "diagnostics": {
+        "failed": {
+          "n": 2,
+          "mean_train_acc_final": 0.8951,
+          "mean_max_val_acc": 0.28,
+          "mean_epochs": 42.5
+        },
+        "ok": {
+          "n": 25,
+          "mean_train_acc_final": 1.0,
+          "mean_max_val_acc": 1.0,
+          "mean_epochs": 98.0
+        }
+      },
+      "median_epoch_to_val90_gen0": 11.0,
+      "median_epoch_to_val90_healthy_gen_ge1": 7.0
+    }
+  },
+  "reference": {
+    "symbol_kl_noise_floor_mean": 0.0008148700697347521,
+    "symbol_kl_noise_floor_std": 4.696712552228323e-05,
+    "label_kl_noise_floor_mean": 4.0127604370354676e-05,
+    "max_symbol_entropy_ln_K": 4.1588830833596715,
+    "bayes_optimal_aux_label_acc": 0.7195436507936509,
+    "bayes_optimal_aux_symbol_acc": 0.3796556752044253,
+    "chance_query_label_1_over_L": 0.125,
+    "guess_among_shown_labels_1_over_n_classes": 0.25,
+    "ln_L": 2.0794415416798357,
+    "pool_size": 20000
+  }
+}

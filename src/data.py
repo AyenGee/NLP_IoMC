@@ -191,6 +191,8 @@ def load_items(path) -> list[dict]:
     """Inverse of save_items: returns the original list-of-dicts format
     (int64 tensors) expected by ListDataset / collate_batch / attribution."""
     packed = torch.load(path, weights_only=True)
+    if isinstance(packed, list):  # legacy snapshot: already a list of dicts (written before save_items existed)
+        return packed
     n = next(iter(packed.values())).shape[0]
     return [{k: v[i].long() for k, v in packed.items()} for i in range(n)]
 
@@ -201,22 +203,34 @@ def mix_datasets(
     p_synthetic: float,
     n_total: int,
     seed: int,
+    with_replacement: bool = True,
 ) -> list[dict]:
     """Build a generation's training pool by sampling a `p_synthetic` fraction
-    from `synthetic_items` and the rest from `real_items` (with replacement if
-    the requested pool is larger than what's available)."""
+    from `synthetic_items` and the rest from `real_items`.
+
+    with_replacement=True (default; what every result so far used) draws
+    each part as a bootstrap resample, so when a part is as large as its
+    source only ~63% of its sequences are distinct. with_replacement=False
+    draws distinct sequences (each source must hold at least as many items as
+    requested), which removes that duplication as a confound when comparing
+    generation >= 1 pools against generation 0's fully distinct pool."""
     g = torch.Generator().manual_seed(seed)
     n_synth = int(round(n_total * p_synthetic))
     n_real = n_total - n_synth
 
-    def sample_with_replacement(items, n):
+    def sample(items, n):
         if n == 0:
             return []
-        idx = torch.randint(len(items), (n,), generator=g)
+        if with_replacement:
+            idx = torch.randint(len(items), (n,), generator=g)
+        else:
+            if n > len(items):
+                raise ValueError(
+                    f"with_replacement=False needs >= {n} source items, got {len(items)}"
+                )
+            idx = torch.randperm(len(items), generator=g)[:n]
         return [items[int(i)] for i in idx]
 
-    pool = sample_with_replacement(real_items, n_real) + sample_with_replacement(
-        synthetic_items, n_synth
-    )
+    pool = sample(real_items, n_real) + sample(synthetic_items, n_synth)
     perm = torch.randperm(len(pool), generator=g).tolist()
     return [pool[i] for i in perm]

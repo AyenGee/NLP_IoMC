@@ -1,0 +1,46 @@
+{
+  "task": {
+    "K": 64,
+    "L": 8,
+    "n_classes": 4,
+    "burstiness": 3,
+    "shuffle_context": true
+  },
+  "model": {
+    "d_model": 64,
+    "n_layers": 2,
+    "n_heads": 4,
+    "d_ff": 256,
+    "dropout": 0.0
+  },
+  "train": {
+    "lr": 0.001,
+    "weight_decay": 0.1,
+    "batch_size": 128,
+    "n_epochs": 80,
+    "warmup_steps": 100,
+    "grad_clip": 1.0,
+    "extended": true,
+    "aux_weight": 1.0,
+    "eval_every": 1,
+    "interp_every": 5,
+    "patience": 30,
+    "seed": 0,
+    "device": "auto",
+    "n_train": 20000,
+    "n_val": 800,
+    "n_test": 800,
+    "data_seed": 0,
+    "log_path": "results/logs/run.csv",
+    "ckpt_path": "results/checkpoints/run.pt"
+  },
+  "collapse": {
+    "n_generations": 10,
+    "p_synthetic": 1.0,
+    "pool_size": 20000,
+    "variant": "extended",
+    "gen_batch_size": 256,
+    "temperature": 1.0,
+    "seed": 0
+  }
+}

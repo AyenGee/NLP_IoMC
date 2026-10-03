@@ -26,13 +26,14 @@ replacement.
 from __future__ import annotations
 
 import dataclasses
+import os
 from pathlib import Path
 
 import torch
 
 from data import TaskConfig, SymbolicICLDataset, dataset_to_items, mix_datasets, collate_batch, save_items
 from model import ModelConfig, InductionTransformer
-from metrics import distribution_stats
+from metrics import distribution_stats, structure_stats, pool_distinct_fraction
 from train import TrainConfig, train_model, interp_snapshot
 from utils import get_device, CSVLogger, save_json
 
@@ -46,6 +47,10 @@ class CollapseConfig:
     gen_batch_size: int = 256
     temperature: float = 1.0
     seed: int = 0
+    # True (default, what the original 18 runs used): each part of a generation's
+    # pool is a bootstrap resample, ~63% distinct sequences. False: distinct
+    # sequences only (control for the duplication confound; see README).
+    with_replacement: bool = True
 
 
 @torch.no_grad()
@@ -108,7 +113,7 @@ def run_collapse(
 ) -> Path:
     device = get_device(train_cfg.device)
     out_dir = Path(out_root) / run_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)  # race-safe: parallel Slurm array tasks create the shared parent concurrently
     gen_logger = CSVLogger(out_dir / "generations.csv")
     save_json(
         {"task": dataclasses.asdict(tcfg), "model": dataclasses.asdict(mcfg),
@@ -127,17 +132,22 @@ def run_collapse(
         if gen == 0:
             train_items = gen0_items
         else:
-            synthetic_items = sample_synthetic_pool(
+            p = gen_cfg.p_synthetic
+            # Skip work whose result mix_datasets would never use (p=0: no synthetic
+            # part; p=1: no real part). Neither touches the global RNG, so results
+            # for the p values already run are unchanged.
+            synthetic_items = [] if p <= 0.0 else sample_synthetic_pool(
                 model_prev, tcfg, gen_cfg.variant, pool_size, device,
                 gen_cfg.gen_batch_size, gen_cfg.temperature,
                 real_seed=real_seed_base + gen * 7919 + 1,
             )
-            real_pool_items = dataset_to_items(
+            real_pool_items = [] if p >= 1.0 else dataset_to_items(
                 SymbolicICLDataset(tcfg, pool_size, seed=real_seed_base + gen * 7919 + 2)
             )
             train_items = mix_datasets(
-                real_pool_items, synthetic_items, gen_cfg.p_synthetic, pool_size,
+                real_pool_items, synthetic_items, p, pool_size,
                 seed=gen_cfg.seed * 1009 + gen,
+                with_replacement=gen_cfg.with_replacement,
             )
 
         save_items(train_items, out_dir / f"gen{gen}_data.pt")
@@ -167,7 +177,14 @@ def run_collapse(
         )
         interp_stats = interp_snapshot(model_prev, result["val_loader"], device)
 
-        row = {"generation": gen, **result["summary"], **dist_stats, **interp_stats}
+        # Pool-structure diagnostics: what the marginal KL above cannot see (label
+        # consistency, repeat counts, ...), plus how many sequences are distinct.
+        pool_stats = structure_stats(train_items, tcfg.n_classes, tcfg.burstiness)
+        row = {
+            "generation": gen, **result["summary"], **dist_stats, **interp_stats,
+            "pool_distinct_frac": pool_distinct_fraction(train_items),
+            **{f"pool_{k}": v for k, v in pool_stats.items()},
+        }
         gen_logger.log(row)
         if verbose:
             print(

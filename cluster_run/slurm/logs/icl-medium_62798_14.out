@@ -1,0 +1,12 @@
+[array task 14/17] ablation_p025.yaml mode=collapse seed=2
+[ablation_p025_seed2 gen 0] test_acc=0.994 symbol_entropy=4.158 kl_vs_gen0=0.0000 induction_score=0.193
+[ablation_p025_seed2 gen 1] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0009 induction_score=0.226
+[ablation_p025_seed2 gen 2] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0009 induction_score=0.267
+[ablation_p025_seed2 gen 3] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0011 induction_score=0.323
+[ablation_p025_seed2 gen 4] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0012 induction_score=0.247
+[ablation_p025_seed2 gen 5] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0010 induction_score=0.315
+[ablation_p025_seed2 gen 6] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0010 induction_score=0.335
+[ablation_p025_seed2 gen 7] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0011 induction_score=0.272
+[ablation_p025_seed2 gen 8] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0011 induction_score=0.227
+[ablation_p025_seed2 gen 9] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0011 induction_score=0.236
+[array task 14] done: {'out_dir': 'results/collapse/ablation_p025_seed2'}

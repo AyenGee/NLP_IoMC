@@ -1,0 +1,12 @@
+[array task 7/17] base_collapse.yaml mode=collapse seed=1
+[base_collapse_seed1 gen 0] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0000 induction_score=0.241
+[base_collapse_seed1 gen 1] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0012 induction_score=0.524
+[base_collapse_seed1 gen 2] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0011 induction_score=0.306
+[base_collapse_seed1 gen 3] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0013 induction_score=0.330
+[base_collapse_seed1 gen 4] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0012 induction_score=0.384
+[base_collapse_seed1 gen 5] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0014 induction_score=0.296
+[base_collapse_seed1 gen 6] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0012 induction_score=0.485
+[base_collapse_seed1 gen 7] test_acc=1.000 symbol_entropy=4.158 kl_vs_gen0=0.0013 induction_score=0.313
+[base_collapse_seed1 gen 8] test_acc=0.241 symbol_entropy=4.158 kl_vs_gen0=0.0012 induction_score=0.156
+[base_collapse_seed1 gen 9] test_acc=0.260 symbol_entropy=4.158 kl_vs_gen0=0.0011 induction_score=0.140
+[array task 7] done: {'out_dir': 'results/collapse/base_collapse_seed1'}
