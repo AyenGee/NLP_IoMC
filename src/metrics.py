@@ -270,6 +270,47 @@ def induction_score(attn_maps: list[torch.Tensor], symbol_tokens: torch.Tensor) 
     return result
 
 
+def induction_offset_scores(attn_maps: list[torch.Tensor], symbol_tokens: torch.Tensor, offsets: tuple[int, ...] = (0, 1, 2)) -> dict:
+    """induction_score generalised over WHERE, relative to an earlier occurrence of
+    the query symbol, a head looks. In the layout s1 l1 s2 l2 ... s_query, an earlier
+    occurrence of the query symbol sits at an even position p; then
+        offset 0: p       the earlier occurrence itself (a duplicate-token / matching pattern)
+        offset 1: p + 1   the label that followed it (the classic induction target)
+        offset 2: p + 2   the next symbol, whose previous-token information is that label
+                          (an induction head aligned one step later; note p + 2 is the query
+                          position itself for the last context pair)
+    A model can solve the task with an induction head at offset 1 OR 2 (the previous-token
+    head then has to supply the matching information at the corresponding position), so a
+    score that only looks at offset 1 can miss a working induction head. Keys are
+    'layer{l}_head{h}_off{d}'; all offsets share the random baseline of induction_score."""
+    B, m1 = symbol_tokens.shape
+    m = m1 - 1
+    if any(d < 0 or 2 * (m - 1) + d > 2 * m for d in offsets):
+        raise ValueError(f"offsets must lie in [0, 2], got {offsets}")
+    match_mask = (symbol_tokens[:, :m] == symbol_tokens[:, -1].unsqueeze(1)).float()  # (B, m)
+    query_pos = 2 * m
+    result = {}
+    for d in offsets:
+        positions = torch.arange(m, device=symbol_tokens.device) * 2 + d
+        for layer_idx, attn in enumerate(attn_maps):
+            att = attn[:, :, query_pos, positions] * match_mask.unsqueeze(1)   # (B, H, m)
+            per_head = att.sum(dim=-1).mean(dim=0)                              # (H,)
+            for h in range(attn.shape[1]):
+                result[f"layer{layer_idx}_head{h}_off{d}"] = per_head[h].item()
+    result["baseline_mean"] = (match_mask.sum(dim=-1) / (2 * m + 1)).mean().item()
+    return result
+
+
+def best_head_by_offset(scores: dict, offsets: tuple[int, ...] = (0, 1, 2)) -> dict:
+    """{d: (head name, score)} for the best head at each offset."""
+    out = {}
+    for d in offsets:
+        cand = {k.rsplit("_off", 1)[0]: v for k, v in scores.items() if k.endswith(f"_off{d}")}
+        best = max(cand, key=cand.get)
+        out[d] = (best, cand[best])
+    return out
+
+
 def attention_entropy(attn_maps: list[torch.Tensor]) -> dict:
     """Mean entropy (nats) of each head's attention distribution, per layer.
     attn_maps[l]: (B, n_heads, seq_len, seq_len), rows sum to 1 over the

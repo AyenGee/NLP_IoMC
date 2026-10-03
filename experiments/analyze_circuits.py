@@ -7,11 +7,16 @@ are, so only small CSVs have to be copied back instead of ~0.5 GB of tensors.
     python experiments/analyze_circuits.py                       # every run under results/collapse
     python experiments/analyze_circuits.py --conds extended_collapse ablation_p05
     python experiments/analyze_circuits.py --conds extended_collapse --seeds 0 1 2
+    python experiments/analyze_circuits.py --group-id 5            # one Slurm array task (see CIRCUIT_GROUPS)
 
 Writes results/analysis/circuits_<run>.csv, one row per generation, with:
 
   * the BEST SINGLE HEAD's induction and previous-token scores and which head
-    it is. (The all-head mean logged during training is diluted by heads that
+    it is, and the best head at each offset from an earlier occurrence of the query
+    symbol (offset 1 is the classic target, the label after it; offset 0 the earlier
+    occurrence itself; offset 2 the next symbol): a model can solve the task with a
+    head that attends to a different offset, which the classic score alone calls "no
+    induction head". (The all-head mean logged during training is diluted by heads that
     play no part in the circuit: a 100%-accurate model scored 0.24-0.45 on it.)
   * zero-ablation of each attention head and of each whole layer, as the drop
     in accuracy on a fixed real evaluation set -- a simplified, node-level
@@ -37,10 +42,12 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from manifest import CIRCUIT_GROUPS  # noqa: E402
 from circuits import head_ablation_sweep, layer_ablation_summary
 from data import SymbolicICLDataset, collate_batch, load_items, TaskConfig
 from interp import load_checkpoint
-from metrics import attention_entropy, induction_score, prev_token_score, structure_stats
+from metrics import attention_entropy, induction_score, induction_offset_scores, best_head_by_offset, prev_token_score, structure_stats
 
 
 def _heads(scores: dict) -> dict:
@@ -72,6 +79,7 @@ def analyze_run(results: Path, run_name: str, n_eval: int = 512) -> list[dict]:
         best_ind = max(ind_h, key=ind_h.get)
         best_prev = max(prev_h, key=prev_h.get)
 
+        off = best_head_by_offset(induction_offset_scores(out.attn_maps, sym))
         single = head_ablation_sweep(model, sym, lab, query)
         worst = max(single, key=lambda r: r.delta_acc)
         layers = layer_ablation_summary(model, sym, lab, query)
@@ -82,6 +90,8 @@ def analyze_run(results: Path, run_name: str, n_eval: int = 512) -> list[dict]:
             "induction_max": ind_h[best_ind], "induction_best_head": best_ind,
             "prev_token_mean": prev["overall_mean"], "prev_token_max": prev_h[best_prev], "prev_token_best_head": best_prev,
             "attn_entropy_mean": ent["overall_mean"],
+            "ind_off0_max": off[0][1], "ind_off0_head": off[0][0], "ind_off1_max": off[1][1], "ind_off1_head": off[1][0],
+            "ind_off2_max": off[2][1], "ind_off2_head": off[2][0],
             "ablate_max_single_delta_acc": worst.delta_acc, "ablate_max_single_head": f"layer{worst.layer}_head{worst.head}",
         }
         row.update({k: v for k, v in layers.items() if k.endswith("delta_acc")})
@@ -112,7 +122,17 @@ def main():
     ap.add_argument("--conds", nargs="+", default=None, help="condition names, e.g. extended_collapse (default: all)")
     ap.add_argument("--seeds", nargs="+", type=int, default=None)
     ap.add_argument("--n-eval", type=int, default=512)
+    ap.add_argument("--group-id", type=int, default=None, help="index into manifest.CIRCUIT_GROUPS (for a Slurm array)")
+    ap.add_argument("--list-groups", action="store_true")
     args = ap.parse_args()
+    if args.list_groups:
+        for i, g in enumerate(CIRCUIT_GROUPS):
+            print(i, g)
+        return
+    if args.group_id is not None:
+        if not (0 <= args.group_id < len(CIRCUIT_GROUPS)):
+            raise SystemExit(f"group-id {args.group_id} out of range [0, {len(CIRCUIT_GROUPS)})")
+        args.conds = CIRCUIT_GROUPS[args.group_id]
     results = Path(args.results)
     out_dir = Path(args.out) if args.out else results / "analysis"
 
@@ -122,6 +142,9 @@ def main():
         if (args.conds is None or cond in args.conds) and (args.seeds is None or int(seed) in args.seeds):
             runs.append(d.name)
     print(f"analysing {len(runs)} run(s): {runs}")
+    if not runs:
+        print("nothing to do (no matching runs)")
+        return
     for name in runs:
         rows = analyze_run(results, name, args.n_eval)
         if rows:

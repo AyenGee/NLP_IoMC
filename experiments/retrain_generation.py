@@ -22,6 +22,10 @@ Run where the data snapshots live (the cluster):
     python experiments/retrain_generation.py --task-id $SLURM_ARRAY_TASK_ID        # i-th failing case
     python experiments/retrain_generation.py --cond extended_collapse --seed 1 --gen 1
 
+Corrected-protocol (v2) runs have no early stopping, so budget 0 would only repeat
+the original run; retrain them at a longer budget instead:
+    python experiments/retrain_generation.py --prefix v2_ --epochs 450 --task-id N
+
 A "case" is the FIRST failing generation of each (condition, seed) run that has
 any failure, the most informative one (a later failure may inherit garbage
 data from an earlier failed generator). Writes results/retrain/*.csv (per-epoch
@@ -46,14 +50,20 @@ from train import TrainConfig, train_model
 FAIL_THRESHOLD = 0.5
 
 
-def failing_cases(results: Path) -> list[tuple[str, int, int]]:
-    """First failing generation (>= 1) of every collapse run that has one."""
+def failing_cases(results: Path, prefix: str | None = None, exclude_prefix: str | None = None) -> list[tuple[str, int, int]]:
+    """First failing generation (>= 1) of every collapse run that has one.
+    `prefix` keeps only conditions whose name starts with it; `exclude_prefix`
+    drops those that do (so the original-protocol cases keep a stable list)."""
     cases = []
     for d in sorted((results / "collapse").glob("*_seed*")):
         gen_csv = d / "generations.csv"
         if not gen_csv.exists():
             continue
         cond, seed = d.name.rsplit("_seed", 1)
+        if prefix and not cond.startswith(prefix):
+            continue
+        if exclude_prefix and cond.startswith(exclude_prefix):
+            continue
         for row in csv.DictReader(open(gen_csv)):
             if int(row["generation"]) >= 1 and float(row["test_acc"]) < FAIL_THRESHOLD:
                 cases.append((cond, int(seed), int(row["generation"])))
@@ -115,11 +125,13 @@ def main():
     ap.add_argument("--cond"); ap.add_argument("--seed", type=int); ap.add_argument("--gen", type=int)
     ap.add_argument("--epochs", type=int, nargs="+", default=[0, 300],
                     help="epoch budgets to train; 0 = the run's original budget (default: 0 300)")
+    ap.add_argument("--prefix", default=None, help="only conditions whose name starts with this (e.g. v2_)")
+    ap.add_argument("--exclude-prefix", default=None, help="skip conditions whose name starts with this")
     args = ap.parse_args()
     results = Path(args.results)
     out_dir = Path(args.out) if args.out else results / "retrain"
 
-    cases = failing_cases(results)
+    cases = failing_cases(results, prefix=args.prefix, exclude_prefix=args.exclude_prefix)
     if args.list:
         for i, c in enumerate(cases):
             print(i, *c)

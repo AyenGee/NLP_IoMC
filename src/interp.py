@@ -16,9 +16,9 @@ import numpy as np
 import torch
 from sklearn.decomposition import PCA
 
-from data import TaskConfig, generate_sequence, sequence_to_tokens
+from data import TaskConfig, SymbolicICLDataset, collate_batch, generate_sequence, sequence_to_tokens
 from model import InductionTransformer, ModelConfig
-from metrics import induction_score, prev_token_score
+from metrics import induction_score, induction_offset_scores, prev_token_score
 
 
 def load_checkpoint(path: str | Path, device: str = "cpu"):
@@ -62,6 +62,7 @@ def plot_attention_maps(
     m = tcfg.context_len
     query_pos = 2 * m
     match_label_positions = [2 * j + 1 for j in range(m) if int(seq.symbols[j]) == int(seq.symbols[-1])]
+    match_symbol_positions = [2 * j for j in range(m) if int(seq.symbols[j]) == int(seq.symbols[-1])]
     labels = _position_labels(tcfg)
 
     n_layers = len(out.attn_maps)
@@ -82,14 +83,58 @@ def plot_attention_maps(
                 ax.add_patch(
                     plt.Rectangle((pos - 0.5, query_pos - 0.5), 1, 1, fill=False, edgecolor="red", linewidth=2)
                 )
+            for pos in match_symbol_positions:
+                ax.add_patch(
+                    plt.Rectangle((pos - 0.5, query_pos - 0.5), 1, 1, fill=False, edgecolor="cyan", linewidth=1.5, linestyle="--")
+                )
             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     fig.suptitle(
-        f"{title_prefix}Attention maps (red boxes = correct copy-source label positions for the query, row {query_pos})"
+        f"{title_prefix}Attention maps (query row {query_pos}; red boxes = labels after earlier occurrences of the query "
+        "symbol (classic induction target), dashed cyan = the earlier occurrences themselves)"
     )
     fig.tight_layout()
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
+@torch.no_grad()
+def plot_head_offset_profile(
+    entries: list[tuple[str, InductionTransformer]],
+    tcfg: TaskConfig,
+    save_path: str | Path | None = None,
+    n_sequences: int = 512,
+    seed: int = 1_000_003,
+):
+    """For each (title, model): the mean attention the query position puts, per head, on the earlier
+    occurrences of its symbol (offset 0), on the labels after them (offset 1, the classic induction
+    target) and on the next symbols (offset 2). One panel per model. A head can do induction at any
+    of these offsets, which is why the classic score alone can mislabel a working model."""
+    ds = SymbolicICLDataset(tcfg, n_sequences, seed=seed)
+    batch = collate_batch([ds[i] for i in range(n_sequences)])
+    fig, axes = plt.subplots(len(entries), 1, figsize=(7.0, 1.7 * len(entries)), squeeze=False)
+    colors = {0: "#56B4E9", 1: "#D55E00", 2: "#009E73"}
+    names = {0: "offset 0: earlier occurrence", 1: "offset 1: label after it (classic)", 2: "offset 2: next symbol"}
+    for ax, (title, model) in zip(axes[:, 0], entries):
+        out = model(batch["symbol_tokens"], batch["label_tokens"], return_attention=True)
+        sc = induction_offset_scores(out.attn_maps, batch["symbol_tokens"])
+        heads = [f"L{l}H{h}" for l in range(len(out.attn_maps)) for h in range(out.attn_maps[0].shape[1])]
+        for d, off in enumerate((0, 1, 2)):
+            vals = [sc[f"layer{l}_head{h}_off{off}"] for l in range(len(out.attn_maps)) for h in range(out.attn_maps[0].shape[1])]
+            ax.bar(np.arange(len(heads)) + (d - 1) * 0.27, vals, width=0.26, color=colors[off], label=names[off])
+        ax.axhline(sc["baseline_mean"], color="gray", ls=":", lw=0.8)
+        ax.set_xticks(range(len(heads)))
+        ax.set_xticklabels(heads, fontsize=7)
+        ax.set_ylim(0, 1.05)
+        ax.set_ylabel("attention mass", fontsize=7)
+        ax.set_title(title, fontsize=7.5)
+        ax.tick_params(labelsize=7)
+    axes[0, 0].legend(fontsize=6, frameon=False, ncol=3, loc="upper right")
+    fig.tight_layout()
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
     return fig
 
 

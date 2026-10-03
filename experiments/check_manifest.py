@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from manifest import GROUPS
+from manifest import GROUPS, ACDC_GROUPS, CIRCUIT_GROUPS
 
 SLURM_DIR = Path(__file__).resolve().parent.parent / "slurm"
 
@@ -30,6 +30,25 @@ def main() -> int:
     bad = 0
     for path in sorted(SLURM_DIR.glob("*.slurm")):
         text = path.read_text()
+        if "tune_hparams.py" in text:
+            from tune_hparams import CELLS
+            rng = parse_array(text)
+            ok = rng == (0, len(CELLS) - 1)
+            print(f"  {'OK ' if ok else 'BAD'} {path.name:24s} tuning cells={len(CELLS)}   array={rng}")
+            bad += not ok
+            continue
+        if "analyze_circuits.py" in text:
+            rng = parse_array(text)
+            ok = rng == (0, len(CIRCUIT_GROUPS) - 1)
+            print(f"  {'OK ' if ok else 'BAD'} {path.name:24s} circuit groups={len(CIRCUIT_GROUPS)} array={rng}")
+            bad += not ok
+            continue
+        if "analyze_acdc.py" in text:
+            rng = parse_array(text)
+            ok = rng == (0, len(ACDC_GROUPS) - 1)
+            print(f"  {'OK ' if ok else 'BAD'} {path.name:24s} acdc groups={len(ACDC_GROUPS)}   array={rng}")
+            bad += not ok
+            continue
         if "run_array_task.py" not in text:
             continue
         rng = parse_array(text)

@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 
 from data import TaskConfig, make_splits, collate_batch, ListDataset
 from model import InductionTransformer, ModelConfig
-from metrics import compute_losses, perplexity, attention_entropy, induction_score, prev_token_score
+from metrics import compute_losses, perplexity, attention_entropy, induction_score, prev_token_score, induction_offset_scores, best_head_by_offset
 from utils import set_seed, get_device, load_config, CSVLogger, save_json
 
 
@@ -99,6 +99,7 @@ def interp_snapshot(model, loader, device) -> dict:
         # Per-head entries are keyed 'layer{l}_head{h}'; the other keys are aggregates.
         return max(v for k, v in scores.items() if "_head" in k)
 
+    off = best_head_by_offset(induction_offset_scores(out.attn_maps, batch["symbol_tokens"]))
     return {
         "attn_entropy_mean": ent["overall_mean"],
         "induction_score_mean": ind["overall_mean"],
@@ -109,6 +110,12 @@ def interp_snapshot(model, loader, device) -> dict:
         # head' signal (added after the first 18 runs, so absent from those logs).
         "induction_score_max": best_head(ind),
         "prev_token_score_max": best_head(prev),
+        # Best head at each offset from an earlier occurrence of the query symbol (see
+        # metrics.induction_offset_scores): 0 = the earlier occurrence itself, 1 = the label
+        # after it (== induction_score_max), 2 = the next symbol. Added for the corrected-
+        # protocol runs after a model was found that solves the task with an offset-0 head.
+        "induction_off0_max": off[0][1],
+        "induction_off2_max": off[2][1],
     }
 
 

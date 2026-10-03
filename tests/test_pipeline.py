@@ -83,6 +83,19 @@ badq = copy.deepcopy(real)
 for it in badq[:50]: it["query_label"] = (it["query_label"] + 1) % tc.L
 check("wrong query labels are detected by frac_query_label_ok", abs(structure_stats(badq, tc.n_classes, tc.burstiness)["frac_query_label_ok"] - 0.9) < 0.02)
 
+# (d) offset-resolved induction score on hand-built attention maps
+from metrics import induction_score, induction_offset_scores, best_head_by_offset
+sy = torch.tensor([[3, 5, 3, 7, 3]])             # context symbols 3,5,3,7 (m=4); the query symbol is 3: earlier occurrences at context index 0 and 2
+T_ = 2 * 4 + 1
+def attn_on(positions):
+    a = torch.zeros(1, 1, T_, T_); a[0, 0, T_ - 1, positions] = 1.0 / len(positions); return [a]
+p0 = [0, 4]; p1 = [1, 5]; p2 = [2, 6]            # symbol positions 2j, the labels after them 2j+1, the next symbols 2j+2
+s0, s1, s2 = (induction_offset_scores(attn_on(x), sy) for x in (p0, p1, p2))
+check("offset scores: attention on the earlier occurrences is offset 0 only", abs(s0["layer0_head0_off0"] - 1) < 1e-6 and s0["layer0_head0_off1"] == 0 and s0["layer0_head0_off2"] == 0)
+check("offset scores: attention on the labels after them is offset 1 (= induction_score)", abs(s1["layer0_head0_off1"] - 1) < 1e-6 and abs(induction_score(attn_on(p1), sy)["layer0_head0"] - 1) < 1e-6)
+check("offset scores: attention on the next symbols is offset 2", abs(s2["layer0_head0_off2"] - 1) < 1e-6 and s2["layer0_head0_off0"] == 0)
+check("best_head_by_offset picks the head and score", best_head_by_offset(s1)[1] == ("layer0_head0", s1["layer0_head0_off1"]))
+
 # ---------------------------------------------------------------- tiny end-to-end runs via the real CLI
 if RES.exists(): shutil.rmtree(RES)
 base = {
@@ -105,12 +118,17 @@ cfgs = {
     "resampled": variant("control_real_resampled", collapse__p_synthetic=0.0, collapse__with_replacement=True),
     "fresh": variant("control_real_fresh", collapse__p_synthetic=0.0, collapse__with_replacement=False),
     "nodup": variant("extended_collapse_nodup", collapse__with_replacement=False),
+    "v2p1": variant("v2_extended_p1", collapse__with_replacement=False),
+    "v2dups": variant("v2_extended_p1_dups", collapse__with_replacement=True),
+    "v2base": variant("v2_base_p1", train__extended=False, collapse__variant="base", collapse__with_replacement=False),
+    "v2ctl": variant("v2_control_real", collapse__p_synthetic=0.0, collapse__with_replacement=False),
 }
 def run(args):
     r = subprocess.run([PY, str(ROOT / "experiments" / "run_experiment.py"), *args, "--results-root", str(RES)], capture_output=True, text=True, cwd=str(ROOT))
     if r.returncode != 0: print(r.stdout[-800:], r.stderr[-1500:])
     return r.returncode
-jobs = [("ext", 0, None), ("ext", 1, 1), ("base", 0, None), ("base", 1, 1), ("resampled", 0, None), ("fresh", 0, None), ("nodup", 0, None)]
+jobs = [("ext", 0, None), ("ext", 1, 1), ("base", 0, None), ("base", 1, 1), ("resampled", 0, None), ("fresh", 0, None), ("nodup", 0, None),
+        ("v2p1", 0, 0), ("v2p1", 1, 1), ("v2dups", 0, 0), ("v2base", 0, 0), ("v2ctl", 0, 0)]
 for key, seed, dseed in jobs:
     a = ["--config", str(cfgs[key]), "--mode", "collapse", "--seed", str(seed)] + (["--data-seed", str(dseed)] if dseed is not None else [])
     check(f"CLI collapse run {key} seed={seed} data_seed={dseed}", run(a) == 0)
@@ -135,6 +153,37 @@ check("synthetic pools from the (tiny, weak) generator are NOT fully valid -> st
 check("base variant pools keep contexts valid (only the label is resampled)", all(v == 1.0 for v in f(gens('base_collapse_seed0'), 'pool_frac_label_consistent')))
 check("--data-seed changes the real pool/val set (gen0 differs between seed0 and seed1 ext runs)", f(ext, "test_loss")[0] != f(gens("extended_collapse_seed1"), "test_loss")[0])
 
+# ---------------------------------------------------------------- shipped configs and the manifest
+sys.path.insert(0, str(ROOT / "experiments"))
+from utils import load_config
+from model import ModelConfig
+from train import TrainConfig
+from collapse import CollapseConfig
+from manifest import GROUPS, CONFIG_DIR
+bad = []
+for p_ in sorted((ROOT / "configs").glob("*.yaml")):
+    c_ = load_config(p_)
+    try:
+        TaskConfig(**c_["task"]); ModelConfig(**c_["model"]); TrainConfig(**c_["train"])
+        if "collapse" in c_: CollapseConfig(**c_["collapse"])
+    except Exception as e_:
+        bad.append((p_.name, str(e_)))
+check("every config in configs/ loads into its dataclasses", not bad, str(bad))
+check("every manifest job points at an existing config", all((CONFIG_DIR / j.config).exists() for g_ in GROUPS.values() for j in g_))
+v2 = [load_config(CONFIG_DIR / j.config) for j in GROUPS["v2"]]
+check("v2 group: fixed 150-epoch budget with early stopping OFF", all(c_["train"]["patience"] is None and c_["train"]["n_epochs"] == 150 for c_ in v2))
+check("v2 group: duplicates only in the deliberate '_dups' condition", all((c_["collapse"]["with_replacement"] is True) == c_["run_name"].endswith("_dups") for c_ in v2))
+check("v2 group: 48 jobs (6 conditions x 8 seeds), each seed with its own real-data pool", len(GROUPS["v2"]) == 48 and all(j.data_seed == j.seed for j in GROUPS["v2"]))
+check("v2 group: the real-data control uses no synthetic data, no early stopping, no duplicates", any(c_["run_name"] == "v2_control_real" and c_["collapse"]["p_synthetic"] == 0.0 and c_["train"]["patience"] is None and c_["collapse"]["with_replacement"] is False for c_ in v2))
+check("v2 group: the original 40 job indices are unchanged by adding the control at the end", [j.config for j in GROUPS["v2"][:40]] == [c for c in ["v2_extended_p1.yaml", "v2_extended_p05.yaml", "v2_extended_p025.yaml", "v2_base_p1.yaml", "v2_extended_p1_dups.yaml"] for _ in range(8)])
+tmp_cfg = SP / "regen_configs"; tmp_cfg.mkdir()
+r_ = subprocess.run([PY, str(ROOT / "experiments" / "make_v2_configs.py"), "--out", str(tmp_cfg)], capture_output=True, text=True, cwd=str(ROOT))
+same = r_.returncode == 0 and all(yaml.safe_load(open(tmp_cfg / j.config)) == yaml.safe_load(open(CONFIG_DIR / j.config)) for j in GROUPS["v2"])
+check("make_v2_configs regenerates exactly the committed v2 configs", same)
+r_ = subprocess.run([PY, str(ROOT / "experiments" / "make_v2_configs.py"), "--out", str(tmp_cfg), "--set", "train.lr=0.003", "--set", "model.d_model=128"], capture_output=True, text=True, cwd=str(ROOT))
+c_ = yaml.safe_load(open(tmp_cfg / "v2_extended_p1.yaml")); hdr = open(tmp_cfg / "v2_extended_p1.yaml").read()
+check("make_v2_configs --set applies overrides to every config and records them in the header", r_.returncode == 0 and c_["train"]["lr"] == 0.003 and c_["model"]["d_model"] == 128 and "train.lr=0.003" in hdr)
+
 # ---------------------------------------------------------------- array-task plumbing
 r = subprocess.run([PY, str(ROOT / "experiments" / "run_array_task.py"), "--group", "controls", "--task-id", "99"], capture_output=True, text=True, cwd=str(ROOT))
 check("run_array_task rejects an out-of-range index with a clear message", r.returncode != 0 and "out of range" in (r.stderr + r.stdout))
@@ -147,8 +196,14 @@ check("check_manifest passes on the real slurm scripts", r.returncode == 0)
 r = subprocess.run([PY, str(ROOT / "experiments" / "analyze_circuits.py"), "--results", str(RES), "--conds", "extended_collapse", "base_collapse", "--n-eval", "100"], capture_output=True, text=True, cwd=str(ROOT))
 if r.returncode != 0: print(r.stdout[-600:], r.stderr[-1500:])
 check("analyze_circuits runs", r.returncode == 0)
+r2 = subprocess.run([PY, str(ROOT / "experiments" / "analyze_circuits.py"), "--list-groups"], capture_output=True, text=True, cwd=str(ROOT))
+r3 = subprocess.run([PY, str(ROOT / "experiments" / "analyze_circuits.py"), "--group-id", "99"], capture_output=True, text=True, cwd=str(ROOT))
+r4 = subprocess.run([PY, str(ROOT / "experiments" / "analyze_circuits.py"), "--results", str(RES), "--group-id", "10", "--n-eval", "50"], capture_output=True, text=True, cwd=str(ROOT))   # v2_control_real exists in the tiny results
+check("analyze_circuits: --list-groups, a bad group id is rejected, and a group id analyses exactly that condition", r2.returncode == 0 and "v2_extended_p1" in r2.stdout and r3.returncode != 0 and r4.returncode == 0 and (RES / "analysis" / "circuits_v2_control_real_seed0.csv").exists() and not (RES / "analysis" / "circuits_v2_base_p1_seed0.csv").exists(), r4.stderr[-300:])
 cc = list(csv.DictReader(open(RES / "analysis" / "circuits_extended_collapse_seed0.csv")))
 check("analyze_circuits: one row per generation with circuit + structure columns", len(cc) == 3 and all(k in cc[0] for k in ["induction_max", "induction_best_head", "prev_token_max", "ablate_max_single_delta_acc", "layer1_all_heads_delta_acc", "pool_frac_fully_valid"]))
+check("analyze_circuits writes the offset-resolved columns, and offset 1 equals the classic score", all(k in cc[0] for k in ["ind_off0_max", "ind_off1_max", "ind_off2_max", "ind_off1_head"]) and all(abs(float(r["ind_off1_max"]) - float(r["induction_max"])) < 1e-6 for r in cc))
+check("generations.csv logs the offset-resolved best-head scores during the run", all(k in ext[0] for k in ["induction_off0_max", "induction_off2_max"]))
 check("best-head induction score >= all-head mean (it is a max over heads)", all(float(r["induction_max"]) >= float(r["induction_mean"]) - 1e-9 for r in cc))
 check("analyze_circuits pool stats agree with the stats recorded during the run", all(abs(float(a["pool_frac_fully_valid"]) - float(b["pool_frac_fully_valid"])) < 1e-9 for a, b in zip(cc, ext)))
 
@@ -166,6 +221,82 @@ if n_cases:
 r = subprocess.run([PY, str(ROOT / "experiments" / "retrain_generation.py"), "--results", str(RES), "--task-id", "999"], capture_output=True, text=True, cwd=str(ROOT))
 check("retrain_generation exits cleanly for a task id past the last case (array is oversized on purpose)", r.returncode == 0 and "nothing to do" in r.stdout)
 
+# ---------------------------------------------------------------- qualitative figures from checkpoints
+r = subprocess.run([PY, str(ROOT / "experiments" / "make_figures.py"), "--run", "extended_collapse_seed0", "--results", str(RES), "--figdir", str(SP / "figs_mf")], capture_output=True, text=True, cwd=str(ROOT))
+if r.returncode != 0: print(r.stdout[-600:], r.stderr[-1500:])
+check("make_figures runs on a given run and writes attention maps, head profile and PCA", r.returncode == 0 and all((SP / "figs_mf" / f).exists() for f in ["attn_extended_collapse_seed0_gen0.png", "attn_extended_collapse_seed0_gen2.png", "head_profile_extended_collapse_seed0.png", "embedding_pca_extended_collapse_seed0.png"]), r.stderr[-300:])
+
+# ---------------------------------------------------------------- ACDC (edge-level circuit discovery)
+from acdc import run_graph, all_edges, acdc, describe, live_subgraph
+from model import InductionTransformer
+from data import collate_batch
+from interp import load_checkpoint
+torch.manual_seed(0)
+rm = InductionTransformer(tc, ModelConfig(d_model=16, n_layers=2, n_heads=2, d_ff=32)).eval()
+for q_ in rm.parameters():                      # larger weights so the check is not trivially satisfied by a near-zero model
+    torch.nn.init.normal_(q_, 0, 0.3) if q_.dim() > 1 else torch.nn.init.normal_(q_, 0, 0.1)
+dsa, dsb = SymbolicICLDataset(tc, 48, seed=11), SymbolicICLDataset(tc, 48, seed=12)
+ba = collate_batch([dsa[i] for i in range(48)]); bb = collate_batch([dsb[i] for i in range(48)])
+lg_full, _ = run_graph(rm, ba["symbol_tokens"], ba["label_tokens"])
+check("ACDC graph with every edge kept reproduces the model's own forward pass", (lg_full - rm(ba["symbol_tokens"], ba["label_tokens"]).label_logits[:, -1]).abs().max() < 1e-4)
+_, corr = run_graph(rm, bb["symbol_tokens"], bb["label_tokens"])
+edges_rm = all_edges(2, 2)
+lg_cut, _ = run_graph(rm, ba["symbol_tokens"], ba["label_tokens"], {e: False for e in edges_rm}, corr)
+check("ACDC graph with every edge cut reproduces the model on the corrupted input", (lg_cut - rm(bb["symbol_tokens"], bb["label_tokens"]).label_logits[:, -1]).abs().max() < 1e-4)
+check("ACDC edge count for 2 layers x 4 heads is 110", len(all_edges(2, 4)) == 110, str(len(all_edges(2, 4))))
+keep_all = acdc(rm, ba["symbol_tokens"], ba["label_tokens"], ba["query_label"], bb["symbol_tokens"], bb["label_tokens"], tau=-1.0)
+check("ACDC with a negative threshold keeps everything (circuit == full model)", keep_all.kl < 1e-9 and keep_all.accuracy == keep_all.full_accuracy and all(keep_all.kept.values()))
+cut_all = acdc(rm, ba["symbol_tokens"], ba["label_tokens"], ba["query_label"], bb["symbol_tokens"], bb["label_tokens"], tau=1e9)
+check("ACDC with a huge threshold removes every edge and leaves an empty circuit", not any(cut_all.kept.values()) and cut_all.n_live_edges == 0)
+mid = acdc(rm, ba["symbol_tokens"], ba["label_tokens"], ba["query_label"], bb["symbol_tokens"], bb["label_tokens"], tau=0.05)
+check("ACDC circuit size shrinks as the threshold grows", cut_all.n_live_edges <= mid.n_live_edges <= keep_all.n_live_edges, f"{cut_all.n_live_edges}<={mid.n_live_edges}<={keep_all.n_live_edges}")
+check("ACDC live edges are a subset of the kept edges", set(mid.live_edges) <= {e for e, v in mid.kept.items() if v})
+d_ = describe(mid, 2, 2)
+check("describe() reports the expected columns", all(k in d_ for k in ["acdc_n_edges", "acdc_kcomp", "acdc_heads", "acdc_mlp0", "acdc_acc"]))
+ck_dir = RES / "collapse" / "extended_collapse_seed0"
+m_, _, _, _ = load_checkpoint(ck_dir / "gen1_model.pt")
+c_a = acdc(m_, ba["symbol_tokens"], ba["label_tokens"], ba["query_label"], bb["symbol_tokens"], bb["label_tokens"], tau=0.1)
+check("ACDC runs on a real checkpoint from a collapse run", 0 <= c_a.accuracy <= 1 and 0 <= c_a.n_live_edges <= len(all_edges(2, 2)))
+
+r = subprocess.run([PY, str(ROOT / "experiments" / "analyze_acdc.py"), "--results", str(RES), "--conds", "extended_collapse", "v2_extended_p1", "--taus", "0.05", "--n-eval", "64"], capture_output=True, text=True, cwd=str(ROOT))
+if r.returncode != 0: print(r.stdout[-600:], r.stderr[-1500:])
+check("analyze_acdc runs", r.returncode == 0)
+ac = list(csv.DictReader(open(RES / "analysis" / "acdc_extended_collapse_seed0.csv")))
+check("analyze_acdc: one row per generation and corruption with circuit columns", len(ac) == 3 * 2 and {r["acdc_corruption"] for r in ac} == {"resample", "labels"} and all(k in ac[0] for k in ["acdc_n_edges", "acdc_kcomp", "acdc_heads", "acdc_full_acc", "acdc_edges"]))
+from acdc import relabel_corruption
+rl = relabel_corruption(ba["symbol_tokens"], ba["label_tokens"], tc.L, seed=3)
+same_sym_same_label = all(len({int(rl[i, j]) for j in range(rl.shape[1]) if ba["symbol_tokens"][i, j] == s_}) == 1 for i in range(10) for s_ in ba["symbol_tokens"][i, :-1].unique())
+check("relabel_corruption keeps the symbols consistent (one new label per symbol) and changes the labels", same_sym_same_label and not torch.equal(rl, ba["label_tokens"]))
+r = subprocess.run([PY, str(ROOT / "experiments" / "analyze_acdc.py"), "--list-groups"], capture_output=True, text=True, cwd=str(ROOT))
+check("analyze_acdc --list-groups lists the groups and a bad group id is rejected", r.returncode == 0 and "v2_extended_p1" in r.stdout and subprocess.run([PY, str(ROOT / "experiments" / "analyze_acdc.py"), "--group-id", "99"], capture_output=True, text=True, cwd=str(ROOT)).returncode != 0)
+
+# ---------------------------------------------------------------- hyper-parameter study
+from tune_hparams import CELLS, run_cell, summarize, TUNE_SEEDS
+check("tuning grid: 15 cells per variant, 30 in all, with exactly one default per variant", len(CELLS) == 30 and sum(c.is_default for c in CELLS) == 2 and len({c.name for c in CELLS}) == 30)
+check("tuning seeds are disjoint from every seed used by the main experiments", not (set(TUNE_SEEDS) & set(range(0, 50))))
+TUNE = SP / "tune_res" / "tuning"
+for c in CELLS:                                   # every cell must construct, train and log (1 tiny epoch each)
+    run_cell(c, TUNE, seeds=[100], epochs=1, n_train=64, n_val=64, n_test=64)
+check("every tuning cell trains for a tiny budget", len(list(TUNE.glob("*.json"))) == 30)
+sm = summarize(TUNE)
+check("tuning summary covers both variants and picks a winner for each", set(sm["variants"]) == {"base", "extended"} and all(v["winner"] and v["n_cells"] == 15 for v in sm["variants"].values()))
+check("tuning selection uses validation accuracy only (no test field in the cell tables)", all("test" not in k for v in sm["variants"].values() for r in v["cells"] for k in r))
+r = subprocess.run([PY, str(ROOT / "experiments" / "tune_hparams.py"), "--task-id", "99"], capture_output=True, text=True, cwd=str(ROOT))
+check("tune_hparams rejects an out-of-range task id", r.returncode != 0 and "out of range" in (r.stderr + r.stdout))
+
+# ---------------------------------------------------------------- statistics helpers and retrain filters
+import importlib.util
+spec = importlib.util.spec_from_file_location("analyze_results", ROOT / "experiments" / "analyze_results.py")
+ar = importlib.util.module_from_spec(spec); spec.loader.exec_module(ar)
+check("Fisher exact p for a perfectly separated 10 vs 10 table is 2/C(20,10)", abs(ar.fisher_exact_p(10, 0, 0, 10) - 2 / 184756) < 1e-12)
+check("Fisher exact p is 1 for identical groups", abs(ar.fisher_exact_p(3, 7, 3, 7) - 1.0) < 1e-9)
+w = ar.wilson(0, 10); check("Wilson interval for 0/10 is [0, ~0.28]", w[0] == 0.0 and abs(w[1] - 0.2775) < 0.002, str(w))
+w = ar.wilson(5, 10); check("Wilson interval for 5/10 is ~[0.24, 0.76]", abs(w[0] - 0.237) < 0.003 and abs(w[1] - 0.763) < 0.003, str(w))
+check("Spearman is 1 for a monotone relation and -1 for a reversed one", ar.spearman([1, 2, 3, 4], [10, 20, 30, 40]) == 1.0 and ar.spearman([1, 2, 3, 4], [4, 3, 2, 1]) == -1.0)
+import retrain_generation as rg
+only_v2, no_v2 = rg.failing_cases(RES, prefix="v2_"), rg.failing_cases(RES, exclude_prefix="v2_")
+check("retrain cases can be filtered by prefix", all(c[0].startswith("v2_") for c in only_v2) and not any(c[0].startswith("v2_") for c in no_v2))
+
 # ---------------------------------------------------------------- generalised analysis
 r = subprocess.run([PY, str(ROOT / "experiments" / "analyze_results.py"), "--results", str(RES), "--figdir", str(SP / "figs_test")], capture_output=True, text=True, cwd=str(ROOT))
 if r.returncode != 0: print(r.stdout[-600:], r.stderr[-2000:])
@@ -174,6 +305,10 @@ S = json.load(open(RES / "analysis_summary.json"))
 check("summary includes controls + nodup + seeds discovered per condition", {"control_real_resampled", "control_real_fresh", "extended_collapse_nodup"} <= set(S["collapse"]) and S["collapse"]["extended_collapse"]["seeds"] == [0, 1])
 check("summary reports pool_distinct_frac by generation", "pool_distinct_frac_by_gen_mean" in S["collapse"]["control_real_resampled"])
 check("both main figures were written", (SP / "figs_test" / "fig_main.png").exists() and (SP / "figs_test" / "fig_failure_map.png").exists())
+check("summary has the v2 conditions, the 2x2 factorial and the generation-0 training table", {"v2_extended_p1", "v2_extended_p1_dups", "v2_base_p1", "v2_control_real"} <= set(S["v2"]) and "all_seeds" in S["factorial"] and set(S["training_gen0"]) == {"base", "extended"})
+check("generation-0 training table reports train/val/test accuracy and perplexity", all(k in S["training_gen0"]["extended"]["mean_std_all_seeds"] for k in ["final_train_acc", "final_val_acc", "test_acc", "test_ppl", "final_val_loss"]))
+check("ACDC summary appears once ACDC CSVs exist", S["acdc"] and "resample@0.05" in S["acdc"]["by_corruption_tau"] and "labels@0.05" in S["acdc"]["by_corruption_tau"])
+check("the v2 figure and the training-curve figure were written", (SP / "figs_test" / "fig_v2.png").exists() and (SP / "figs_test" / "fig_training.png").exists())
 
 # ---------------------------------------------------------------- the real results must be untouched
 real_after = snapshot(ROOT / "results")

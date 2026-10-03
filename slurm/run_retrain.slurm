@@ -30,4 +30,4 @@ export OMP_NUM_THREADS="$SLURM_CPUS_PER_TASK"
 export MKL_NUM_THREADS="$SLURM_CPUS_PER_TASK"
 
 cd "$SLURM_SUBMIT_DIR"
-python experiments/retrain_generation.py --task-id "$SLURM_ARRAY_TASK_ID"
+python experiments/retrain_generation.py --exclude-prefix v2_ --task-id "$SLURM_ARRAY_TASK_ID"

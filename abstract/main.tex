@@ -1,14 +1,16 @@
 %
-% Extended abstract -- Model collapse and the induction-head circuit
+% Extended abstract -- Recursive training and the induction-head circuit
 % Based on the CCN two-page summary template (ccn_style.tex).
 %
-% DRAFT. Every number below is produced by experiments/analyze_results.py
-% from results/ (see results/analysis_summary.json). Compile on Overleaf (no
-% LaTeX engine was available where this was drafted) and check the page
+% DRAFT 2. Every number below is produced by experiments/analyze_results.py
+% from results/ (see results/analysis_summary.json). This version REPLACES the
+% first draft, whose headline ("abrupt collapse, memorisation replaces
+% induction") the follow-up experiments mostly overturned. Compile on Overleaf
+% (no LaTeX engine was available where this was drafted) and check the page
 % count: the body must fit the two-page limit. If it overflows, cut in this
 % order: (1) the Background sentence on circuit-discovery tools, (2) the
 % "Diagnostics" detail in Methods, (3) the Discussion limitations (they are
-% repeated in full in the Supplementary Material), (4) Fig. 1(b).
+% repeated in the Supplementary Material), (4) Fig. 2(a).
 %
 \documentclass[10pt,letterpaper]{article}
 
@@ -33,7 +35,7 @@
 \usepackage{amsthm}
 \usepackage[labelfont=bf, margin=0.8cm, font=sf]{caption}
 
-\title{Model Collapse Abruptly Removes the Induction Circuit: A Mechanistic Study on a Synthetic In-Context Learning Task}
+\title{Is It Model Collapse? Duplicated Data and Early Stopping Mimic the Loss of an Induction Circuit}
 
 % TODO(author): replace with the real author name(s), 1--3 people.
 \author{{\large \bf [Author 1]} \\ University of the Witwatersrand, 1 Jan Smuts Ave,\\ Braamfontein, Johannesburg, 2000, South Africa}
@@ -55,19 +57,17 @@
 \bf
 \looseness=-1
 Training on model-generated data risks \emph{model collapse}, while much
-in-context learning (ICL) relies on \emph{induction heads}. Does collapse
-degrade this circuit? We train small transformers on a few-shot symbol task
-that only in-context induction can solve, and run 10-generation
-fit$\to$sample$\to$refit pipelines in a base variant (the model relabels
-real contexts) and an extended variant (it generates whole sequences), with
-3 seeds and a data-mixing ablation. Collapse is abrupt, not gradual: with
-fully synthetic data the extended model's accuracy falls from 99.5\% to
-$\approx$20\% within 1--4 generations in every seed and never recovers, and
-induction scores drop to the random-attention baseline. Failed models fit
-their training pool (train accuracy 0.96) but do not generalise
-(validation $\approx$0.27): memorisation replaces induction. Marginal symbol
-statistics barely move and miss the failure. With 25\% synthetic data 26 of
-27 trained models were healthy, but the base variant is not immune.
+in-context learning (ICL) relies on \emph{induction heads}. We run
+10-generation fit$\to$sample$\to$refit pipelines (8 seeds) on a few-shot task
+that only in-context induction can solve. They first appear to collapse
+abruptly: with fully synthetic data 51 of 72 later models fail and none
+recovers. This is mostly a training artifact: retraining first failures
+without early stopping recovers 4 of 6, and removing duplicate sequences,
+which our resampling introduced, leaves 1 failure in 27. What remains is
+gradual: without duplicates, half the accurate models lose the classic
+induction head yet still solve the task, less accurately (0.85 vs.\ 0.997),
+unlike models trained on real data. Marginal symbol statistics miss this,
+though synthetic pools are structurally corrupted from generation 1.
 }
 \begin{quote}
 \small
@@ -76,143 +76,128 @@ statistics barely move and miss the failure. With 25\% synthetic data 26 of
 
 \section{Introduction} \label{Intro}
 \looseness=-1
-Models are increasingly trained on text produced by earlier models.
+Models are increasingly trained on earlier models' output.
 \citet{shumailov2023curse,shumailov2024ai} show that recursively fitting
 generation $n$ to samples from generation $n{-}1$ erodes the tails of the
-learned distribution until outputs are homogeneous. This is measured through
-output statistics; what happens \emph{inside} the model is little studied.
-We study the \emph{induction head}: a previous-token head feeding a later
-head that attends to what followed an earlier occurrence of the current
-token and copies it. \citet{olsson2022incontext} argue this circuit
-underlies much ICL, and \citet{singh2024needs} study how it forms, abruptly,
-on a synthetic few-shot task. We adopt that task because per-sequence
-relabelling forbids memorising an exemplar$\to$label table: accuracy that
-survives must come from in-context induction. Circuit-discovery work
-motivates our diagnostics (ACDC, \citealp{conmy2023towards}; training-data
-attribution, \citealp{chen2026mechanistic}), though we implement only
-simplified versions. \textbf{Does recursive training on synthetic data
-degrade the induction circuit, is it replaced by memorisation, and does
-distributional drift predict it?}
+learned distribution; this is measured through output statistics, while the
+model's internals are little studied. We study the \emph{induction head}: a
+previous-token head feeding a later head that attends to what followed an
+earlier occurrence of the current token and copies it.
+\citet{olsson2022incontext} argue it underlies much ICL, and
+\citet{singh2024needs} study its abrupt formation on a synthetic few-shot
+task, which we adopt because per-sequence relabelling forbids memorising an
+exemplar$\to$label table. ACDC \citep{conmy2023towards} and training-data
+attribution \citep{chen2026mechanistic} motivate our diagnostics, though we
+implement only simplified versions. \textbf{What does recursive training do to
+the induction circuit, and how much of the apparent damage is real?}
 
 \section{Methods}
 \looseness=-1
-\textbf{Task.} Each sequence shows 4 distinct exemplars ($K{=}64$ symbol
-IDs), 3 times each in random order, each paired with a label ($L{=}8$) drawn
-afresh for that sequence; a query exemplar's label is the target. Symbol IDs
-replace Omniglot images, a deliberate simplification: the mechanism does not
-depend on the image encoder, and repeat structure stays exactly controlled.
-Pools hold 20{,}000 sequences; validation and test sets (800 each) always
-come from the true distribution, so accuracy always measures real ICL.
-\textbf{Model.} A causal transformer with 2 layers $\times$ 4 heads and
-$d{=}64$ (the minimal previous-token$\to$induction depth). \emph{Base}: loss
-on the query label only. \emph{Extended}: auxiliary heads also predict, at
-every position, the next symbol and the current symbol's label, making the
-model a generator of whole sequences. Every generation trains from scratch
-from the same initialisation, so a failure means the data no longer lets
-training acquire the circuit, not that a persistent model forgot.
-\textbf{Collapse pipeline.} Generation 0 uses real data; generation $n$
-trains on a pool in which a fraction $p$ is sampled from model $n{-}1$ and
-the rest is fresh real data (single-hop recursion, no accumulation).
-Sampling differs by variant, the crux of the design: the base model can only
-resample a real context's \emph{label}, so contexts cannot drift; the
-extended model samples whole sequences autoregressively, so its errors can
-compound. We run 10 generations: extended at $p\in\{0.25,0.5,1\}$, base at
-$p{=}1$, 3 seeds each (12 runs, 120 trained models), plus 6 no-collapse
-runs. \textbf{Diagnostics.} Test accuracy and loss (does ICL survive?); a
-task-grounded \emph{induction score}, the attention mass the query puts on
-the labels that followed earlier occurrences of its symbol, averaged over
-heads (random baseline 0.12), with a previous-token score and attention
-entropy (does the circuit degrade?); train versus validation accuracy
-(memorisation?); symbol-usage entropy and KL divergence to generation 0,
-against a measured noise floor of $8{\times}10^{-4}$ nats between two
-independent real pools (does marginal drift predict failure?).
+\textbf{Task and model.} Each sequence shows 4 distinct exemplars ($K{=}64$
+symbols), 3 times each in random order, each with a label ($L{=}8$) drawn
+afresh per sequence; the query exemplar's label is the target. Symbol IDs
+replace Omniglot images, a deliberate simplification, as the mechanism does not
+depend on the encoder. Pools hold 20{,}000 sequences; validation and test sets
+(800 each) come from the true distribution. A causal transformer with 2 layers
+$\times$ 4 heads, $d{=}64$. \emph{Base}: loss on the query label only.
+\emph{Extended}: auxiliary heads also predict the next symbol and its label, so
+it can generate whole sequences. \textbf{Pipeline.} Generation 0 trains on real
+data; generation $n$ trains from scratch, from the same initialisation, on a
+pool in which a fraction $p$ is sampled from model $n{-}1$ and the rest is fresh
+real data. The base model can only resample a real context's \emph{label}; the
+extended model samples whole sequences, so errors can compound. Pools for
+generations $\geq$1 are with-replacement resamples ($\approx$63\% distinct),
+and training stops early on validation loss (patience 30/40). We run 10
+generations: extended at $p\in\{0.25,0.5,1\}$, base at $p{=}1$, 8 seeds each (5
+with independent real-data pools). \textbf{Checks.} We (i) retrained the first
+failure of each failing run without early stopping; (ii) ran controls ($p{=}0$
+with and without resampling; $p{=}1$ without duplicates; 3 seeds); and (iii)
+analysed every model: its best head's \emph{induction score} (attention the
+query puts on the labels that followed earlier occurrences of its symbol;
+random baseline 0.12), head and layer ablations, and training-pool structure
+(label consistency, repeat counts), against marginal symbol KL (noise floor
+$8{\times}10^{-4}$ nats).
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/fig_main.png}
-  \caption{Extended-variant collapse is abrupt and absorbing, with a
-  memorisation signature. (a,\,b) One line per seed at $p{=}1$; dotted line:
-  guessing among the 4 labels shown in context. (c) Seed 0: a failed
-  generation fits its training pool (solid) but not validation data
-  (dashed); a healthy one does both.}
+  \caption{Apparent collapse is largely a training artifact. (a) Extended model
+  at $p{=}1$, one line per seed; dotted: guessing among the 4 shown labels.
+  (b) First failure of each failing run: the original early-stopped model
+  ($\times$), retrained from the same pool without early stopping at the original
+  budget (circle) and for 300 epochs (square). (c) Without duplicates (seeds 0,
+  1), accuracy (solid) stays high after the best-head induction score (dashed)
+  falls to the random level.}
   \label{fig:main}
 \end{figure*}
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/fig_failure_map.png}
-  \caption{(a) Test accuracy of all 120 collapse-run models: failures occur
-  in every seed at $p{=}1$ but in a single seed for $p{<}1$ and the base
-  variant. (b) Mean symbol KL to generation 0 (log scale): only $p{=}1$
-  rises clearly above the noise floor, and it is still small when accuracy
-  has already collapsed.}
-  \label{fig:map}
+  \includegraphics[width=\textwidth]{figures/fig_pools.png}
+  \caption{(a) Share of runs whose model has failed (test accuracy $<$0.5) per
+  generation; $n$ = seeds with a healthy generation 0. (b) Structure of the
+  synthetic pool at $p{=}1$: from generation 1 most sequences are not fully
+  valid, and label consistency decays.}
+  \label{fig:pools}
 \end{figure*}
 
 \section{Results}
 \looseness=-1
-\textbf{Sanity check.} All six no-collapse runs reach $\geq$99.4\% test
-accuracy (base: 100\%) after an abrupt jump in validation accuracy at epoch
-10--28, the induction phase change (Supp.\ Table~\ref{tab:sanity}).
-\textbf{Collapse is abrupt and absorbing} (Figs.~\ref{fig:main}a,
-\ref{fig:map}a). At $p{=}1$ the extended model falls from 99.5\% (generation
-0) to $\approx$20\% in all three seeds, first failing at generation 4, 1
-and 3, and no seed recovers (22 of 27 models fail, i.e.\ test accuracy
-$<$0.5; Supp.\ Table~\ref{tab:fail}). Test loss rises from 0.015 to 5.7 nats (uniform guessing: 2.08):
-failed models are confidently wrong. Only one seed shows a graded precursor
-(0.998$\to$0.979$\to$0.928$\to$0.256). \textbf{The circuit disappears}
-(Fig.~\ref{fig:main}b): the induction score falls from 0.245 to 0.128
-(baseline 0.120), the previous-token score from 0.185 to 0.139, and
-attention entropy rises from 1.33 to 2.00 nats (maps: Supp.\ Fig.~\ref{fig:attn}).
-\textbf{Memorisation replaces induction} (Fig.~\ref{fig:main}c): across the
-22 failed models, training accuracy reaches 0.96 on average while validation
-accuracy peaks at 0.27 on average (never above 0.32) and validation loss rises
-steadily after the first epochs; healthy models reach 1.00 and 0.99--1.00. \textbf{Real data helps, and the base
-variant is not immune} (Fig.~\ref{fig:map}a). At $p{=}0.25$ 1 of 27 models
-fails; at $p{=}0.5$, 6 of 27, with recoveries. All 9 failures at $p{<}1$ or
-in the base variant occur in seed 1. The base variant, expected to show weak
-collapse, is healthy in 25 of 27 models, but when it fails (seed 1,
-generations 8--9) the failure is as complete as the extended model's.
-\textbf{Marginal drift is a weak predictor} (Fig.~\ref{fig:map}b). At $p{=}1$
-symbol KL grows from 0.0015 to 0.044 nats (54$\times$ the floor) and symbol
-entropy falls by only 1\% (4.158$\to$4.115, maximum 4.159), yet the pools
-that first triggered failure had KL of just 0.0025--0.0034 (3.1--4.2$\times$ the
-floor), and failed generations at $p{<}1$ sit at 1.0--3.6$\times$ the floor.
+\textbf{As first run, collapse looks abrupt and absorbing}
+(Fig.~\ref{fig:pools}a). At $p{=}1$ the extended model fails (test accuracy
+$<$0.5) in 51 of 72 later generations, in 7 of 8 seeds, and none recovers;
+counts are 23/72 at $p{=}0.5$ and 8/72 at $p{=}0.25$ (Supp.\
+Table~\ref{tab:fail}). The base variant fails in 2 of 63 in one seed, the first
+on a pool still 99.99\% valid; another base run failed at generation 0 on clean
+data. \textbf{Early stopping manufactures failures} (Fig.~\ref{fig:main}b).
+Failed extended models reach training accuracy 0.95 while validation accuracy
+peaks at 0.26, and patience stops training after 31--58 epochs. Retrained
+without early stopping, 4 of 6 first failures reach at least 0.94, 1 reaches
+0.83 after $\sim$190 epochs, and 1 (base) stays failed (Supp.\
+Table~\ref{tab:retrain}). \textbf{Duplicates create the cliff}
+(Fig.~\ref{fig:main}a). Without duplicates the same three seeds at $p{=}1$ fail
+1 of 27 times instead of 22 of 27, declining gradually (generation 9: 0.84,
+0.39, 0.96); real-data controls never fail (0 of 54). \textbf{The circuit is
+replaced, not just lost} (Fig.~\ref{fig:main}c). Failed models (n=91) have no
+head scoring $\geq$0.30, and ablating layer 1 changes nothing. Accurate models
+(n=299) average 0.83 for their best head (92\% in layer 1) and lose accuracy if
+either layer is ablated. Without duplicates, however, 11 of 21 accurate later
+models lack a classic head, against 9\% on real data and 0\% in base (Supp.\
+Table~\ref{tab:alt}); across all
+runs, such models average 0.85 accuracy vs.\ 0.997 and their layers still
+matter (ablation drops 0.61, 0.72): a different attention-based mechanism, not
+memorisation. Switches go both ways (8 vs.\ 8 of 251 pairs). \textbf{Marginal
+drift is weak, and pool structure does not explain failure}
+(Fig.~\ref{fig:pools}b). At a model's first failure, symbol KL is a median
+$3.9\times$ its floor ($p{=}1$), yet from generation 1 only 16\% of synthetic
+sequences are fully valid (repeat counts right in 18\%). Pools from 24 healthy
+generation-0 models do not separate the 3 that fail at generation 1 (AUC
+0.44--0.68).
 
 \section{Discussion}
 \looseness=-1
-\textbf{Collapse here behaves like a bifurcation, not erosion.} Outcomes are
-bimodal: a trained model either has the circuit (accuracy $\approx$1) or
-lacks it ($\approx$0.2). That contrasts with the gradual tail loss
-characterising collapse in generative models \citep{shumailov2024ai}, and is
-consistent with induction heads forming through an abrupt phase change
-\citep{olsson2022incontext,singh2024needs}. We hypothesise that perturbed
-training data pushes optimisation into a regime where fitting the pool is
-easier than learning the general rule, after which the model never
-generalises; at $p{=}1$ failure is absorbing, plausibly because a failed
-generator's samples are poor training data. \textbf{Answering the question.}
-The circuit degrades (scores at baseline, diffuse attention), and what
-replaces it is memorisation of the training pool, not of the task mapping,
-which relabelling makes impossible. \textbf{Marginal statistics are nearly
-blind.} Entropy and KL, our analogue of tail loss, barely moved while ICL
-vanished, so a model could look healthy in distribution yet have lost the
-circuit. The damage must lie in sample \emph{structure} that marginals
-cannot see, such as inconsistent labels for a repeated symbol or wrong repeat
-counts; the extended model's next-symbol head is 14\% below the Bayes-optimal
-accuracy (0.326 vs.\ 0.380), consistent with imperfect repeat structure. We
-did not test this, as dataset snapshots were not retrieved.
-\textbf{Limitations.} (i) Three seeds, and every failure at $p{<}1$ is in
-one initialisation, so failure probabilities are not estimable; the real-data
-pool is shared across seeds. (ii) Generations $\geq$1 use size-matched
-resamples with replacement ($\approx$63\% distinct sequences) and healthy
-later generations reach 90\% validation accuracy sooner than generation 0
-(medians 4--9 vs.\ 19 epochs in extended runs, 7 vs.\ 11 in base; Supp.\
-Table~\ref{tab:t90}); without a $p{=}0$ control we cannot say how much this
-matters, although the mostly healthy base and $p{=}0.25$ runs share it. (iii) Failed runs were early-stopped after 31--43 epochs, so a delayed
-transition is not excluded. (iv) Scores average all heads; our per-head
-ablation and influence-proxy tools were not applied to the collapse
-checkpoints. (v) A symbolic task, a tiny model, and final-epoch weights
-(which inflate loss).
+\textbf{Most of the abrupt collapse we first measured is a training artifact.}
+Duplicate sequences make memorising the pool easy, and early stopping on
+validation loss fires during the memorisation phase that precedes a delayed
+transition to generalisation, so a failure under this protocol is not reliable
+evidence that the circuit was lost. Because failed models also generated the
+next generation's data, the absorbing failures at $p{=}1$ may largely be
+prematurely stopped generators propagating; we did not test later failures.
+\textbf{What survives is gradual and mechanistic.} Without duplicates, fully
+synthetic training changes which solution training finds: half of the accurate
+models lose the classic layer-1 induction head and keep a weaker attention-based
+mechanism. Here the circuit is thus replaced, not by memorisation but by a less
+accurate mechanism; this rests on 3 early-stopped runs, so a rerun with fixed
+budgets and no duplicates is needed. \textbf{Retractions.} Marginal statistics
+are nearly blind, but our earlier hypothesis that structural corruption drives
+failure is unsupported: it is large yet unrelated to which generation-1 models
+fail. The base variant behaves as the brief predicted; its failures began on
+near-clean pools, so are seed-dependent training failures.
+\textbf{Limitations.} (i) Only first failures were retrained. (ii) Three
+no-duplicate runs; the 300-epoch retrain also stretches the learning-rate
+schedule. (iii) The induction score detects only the classic pattern; the
+alternative mechanism is uncharacterised. (iv) Seeds 0--2 share a real-data
+pool. (v) A symbolic task and a tiny model.
 
 \section{Acknowledgements (Not in Page Limit)}
 Computations were performed using High Performance Computing infrastructure
@@ -278,105 +263,136 @@ reflect your own usage before submission, per course policy.)}
 $d_\text{model}{=}64$, $d_\text{ff}{=}256$; AdamW, learning rate $10^{-3}$,
 weight decay 0.1, batch 128, 100 warm-up steps with cosine decay, gradient
 clipping 1.0; at most 100 (base) or 80 (extended) epochs with early stopping
-on validation loss (patience 40 and 30 respectively); 20{,}000 training
-sequences per generation, 800 validation and 800 test sequences from the true
-distribution. Seeds 0, 1, 2 set initialisation and sampling randomness; the
-real-data pool seed is shared across seeds. Training ran on mscluster as
-Slurm array jobs; no GPU was requested, and the code selects the device
-automatically.
+on validation loss (patience 40 and 30); 20{,}000 training sequences per
+generation, 800 validation and 800 test sequences from the true distribution.
+Seeds set initialisation and sampling randomness; seeds 0--2 share one
+real-data pool and validation/test set (data seed 0), seeds 3--7 each use
+their own (data seed = seed). Training ran on mscluster CPU nodes as Slurm
+array jobs; no GPU was requested.
 
-\textbf{Provenance.} All 18 (experiment, seed) runs finished. In the first
-submission of the medium group (job 62527), 6 of 9 tasks crashed at start-up
-with a \texttt{FileExistsError}: parallel tasks raced to create the shared
-directory \texttt{results/collapse/}. They wrote no results and were
-resubmitted unchanged as job 62798 (the race is now fixed with
-\texttt{os.makedirs}). The other groups ran as jobs 62521 (fast) and 62535
-(slow). Generation 0 of every collapse run reproduces the matching no-collapse
-run (test accuracy identical in 6 of 6 pairs; induction score identical in 5
-of 6, the sixth differing by 0.0006 because that no-collapse log's last
-snapshot predates early stopping), confirming determinism across jobs. Exact commands are in \texttt{README.txt}; every number in this
-document is computed by \texttt{experiments/analyze\_results.py}.
+\textbf{Provenance.} All 41 collapse runs (4 conditions $\times$ 8 seeds plus
+3 controls $\times$ 3 seeds) completed with 10 generations. Original runs:
+jobs 62521 (no-collapse), 62535 (base collapse), 62527 and 62798 (extended
+collapse and ablations; in the first submission, 6 of 9 tasks crashed at
+start-up with a \texttt{FileExistsError} from parallel tasks racing to create
+\texttt{results/collapse/}, wrote no results, and were resubmitted unchanged as
+62798; the race is fixed in the code). Follow-ups: 63092 (controls), 63093 and
+63094 (extra seeds), 63086 (retraining), 63237 (per-generation circuit and
+pool analysis; an earlier job, 63085, covered only the original 12 runs and is
+superseded). Generation 0 of each original collapse run reproduces the
+matching no-collapse run in test accuracy (6 of 6). The first 18 runs predate
+the per-generation pool and best-head logging; their pool statistics and
+circuit measurements come from \texttt{experiments/analyze\_circuits.py} run on
+the saved checkpoints and dataset snapshots. Commands are in
+\texttt{README.txt}.
 
 \textbf{Pilot observation (not part of the reported results).} With
 4{,}000-sequence pools, some initialisations (and a pool with 0.4\% label
 noise) memorised the training set instead of learning induction even without
-collapse; with 20{,}000 sequences a previously failing seed reached 100\%
-accuracy and 1\% injected label noise still gave 99.6\%. Those pilot logs
-were not retained, so we report this as motivation for the pool size only.
+collapse; 20{,}000 sequences removed this in pilot tests. Those logs were not
+retained, so this only motivates the pool size.
 
 \begin{table*}[h]
 \centering\footnotesize
-\caption{No-collapse sanity runs. ``Epoch to 0.9'': first epoch with
-validation accuracy $>$0.9. Induction score is averaged over all 8 heads
-(random baseline 0.12). The last row is the Bayes-optimal accuracy of the
-auxiliary heads under the true generating process, computed by simulation.}
-\label{tab:sanity}
-\begin{tabular}{@{}llccccc@{}}
-\toprule
-Model & Seed & Test acc. & Epoch to 0.9 & Induction score & Next-label acc. & Next-symbol acc.\\
-\midrule
-base     & 0 & 1.000 & 10 & 0.452 & -- & --\\
-base     & 1 & 1.000 & 23 & 0.241 & -- & --\\
-base     & 2 & 1.000 & 11 & 0.375 & -- & --\\
-extended & 0 & 0.994 & 19 & 0.196 & 0.713 & 0.306\\
-extended & 1 & 0.999 & 12 & 0.347 & 0.719 & 0.315\\
-extended & 2 & 0.994 & 28 & 0.193 & 0.710 & 0.358\\
-\midrule
-Bayes-optimal & -- & -- & -- & -- & 0.720 & 0.380\\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\subsection*{S2. Failure counts and training dynamics}
-\begin{table*}[h]
-\centering\footnotesize
-\caption{Per condition: models with test accuracy $<$0.5 among the 27
-trained at generations 1--9 (3 seeds), the first failing generation per seed,
-and mean training dynamics of failed vs.\ healthy models (final train
-accuracy / maximum validation accuracy over epochs / epochs run).}
+\caption{Failures (test accuracy $<$0.5) among models trained at generations
+1--9. $^\ast$One of the 8 base runs failed at generation 0 on clean data and is
+excluded. The ``same seeds'' row re-lists extended $p{=}1$ with duplicates for
+seeds 0--2, the seeds of the no-duplicate run.}
 \label{tab:fail}
-\begin{tabular}{@{}lcccll@{}}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-Condition & Failed & Seeds hit & First failing gen.\ (s0/s1/s2) & Failed: train / max val / epochs & Healthy: train / max val / epochs\\
+Condition & Seeds & Failed / later models & Seeds with $\geq$1 failure\\
 \midrule
-extended, $p{=}1.0$  & 22/27 & 3 & 4 / 1 / 3 & 0.957 / 0.268 / 31.5 & 1.000 / 0.992 / 74.0\\
-extended, $p{=}0.5$  &  6/27 & 1 & -- / 1 / -- & 0.813 / 0.290 / 35.3 & 1.000 / 0.989 / 72.7\\
-extended, $p{=}0.25$ &  1/27 & 1 & -- / 3 / -- & 0.811 / 0.273 / 37.0 & 1.000 / 0.999 / 75.6\\
-base, $p{=}1.0$      &  2/27 & 1 & -- / 8 / -- & 0.895 / 0.280 / 42.5 & 1.000 / 1.000 / 98.0\\
+extended, $p{=}1.0$                       & 8        & 51/72 & 7/8\\
+extended, $p{=}0.5$                       & 8        & 23/72 & 5/8\\
+extended, $p{=}0.25$                      & 8        & 8/72  & 4/8\\
+base, $p{=}1.0$                           & $7^\ast$ & 2/63  & 1/7\\
+\midrule
+extended, $p{=}1.0$, same seeds, with duplicates & 3 & 22/27 & 3/3\\
+extended, $p{=}1.0$, no duplicates        & 3        & 1/27  & 1/3\\
+control: real data, resampled ($p{=}0$)   & 3        & 0/27  & 0/3\\
+control: real data, fresh ($p{=}0$)       & 3        & 0/27  & 0/3\\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\subsection*{S3. An unexplained effect: later generations learn faster}
+\begin{table*}[h]
+\centering\footnotesize
+\caption{First failing generation of each failing original run, retrained from
+its saved pool with early stopping disabled: test accuracy (epoch at which
+validation accuracy first exceeded 0.9). ``Original budget'' is 80 epochs for
+extended and 100 for base runs; ``300 epochs'' also stretches the cosine
+learning-rate schedule, so it is not an exact continuation.}
+\label{tab:retrain}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Run (condition, seed, generation) & Original (stopped at epoch) & No early stop, original budget & No early stop, 300 epochs\\
+\midrule
+extended $p{=}1.0$, s0, g4  & 0.256 (32) & 0.350 (--)  & 0.831 (--; max val.\ 0.879 at epoch 193)\\
+extended $p{=}1.0$, s1, g1  & 0.254 (34) & 0.983 (52)  & 0.985 (37)\\
+extended $p{=}1.0$, s2, g3  & 0.321 (35) & 0.853 (--)  & 0.949 (39)\\
+extended $p{=}0.5$, s1, g1  & 0.367 (36) & 0.986 (45)  & 0.983 (34)\\
+extended $p{=}0.25$, s1, g3 & 0.258 (37) & 0.245 (--)  & 1.000 (43)\\
+base $p{=}1.0$, s1, g8      & 0.241 (43) & 0.253 (--)  & 0.242 (--)\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table}[h]
+\centering\footnotesize
+\caption{Share of accurate (test accuracy $\geq$0.9) models of generations
+$\geq$1 with no classic induction head (best-head induction score $<$0.3).
+Among all non-failed models, those without one average 0.85 accuracy (n=44)
+against 0.997 for those with one (best head $\geq$0.5; n=267).}
+\label{tab:alt}
+\begin{tabular}{@{}lc@{}}
+\toprule
+Training data & No classic head\\
+\midrule
+real data only (controls)   & 5/53 (9\%)\\
+base, $p{=}1.0$             & 0/61\\
+extended, $p{=}0.25$        & 0/63\\
+extended, $p{=}0.5$         & 3/47 (6\%)\\
+extended, $p{=}1.0$, duplicates    & 0/17\\
+extended, $p{=}1.0$, no duplicates & 11/21 (52\%)\\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{table}[h]
 \centering\footnotesize
 \caption{Median epoch at which validation accuracy first exceeds 0.9, for
-generation 0 and for healthy models of generations $\geq$1 (same seeds, same
-initialisation).}
+generation 0 and for healthy models of generations $\geq$1. The first four
+rows use all 8 seeds, the others seeds 0--2.}
 \label{tab:t90}
 \begin{tabular}{@{}lcc@{}}
 \toprule
 Condition & Gen.\ 0 & Healthy gen.\ $\geq$1\\
 \midrule
-extended, $p{=}1.0$  & 19 & 9\\
-extended, $p{=}0.5$  & 19 & 4\\
-extended, $p{=}0.25$ & 19 & 4\\
-base, $p{=}1.0$      & 11 & 7\\
+extended $p{=}1.0$ / $0.5$ / $0.25$ & 13 & 6 / 4 / 6\\
+base $p{=}1.0$                      & 13 & 7\\
+extended $p{=}1.0$, no duplicates   & 19 & 19\\
+control: real, resampled            & 19 & 5\\
+control: real, fresh                & 19 & 10\\
 \bottomrule
 \end{tabular}
 \end{table}
-Healthy later generations reach the induction transition roughly
-1.6--4.8$\times$ sooner than generation 0, even in the base variant, whose
-contexts are real and whose labels differ from the true ones only through the
-model's rare mistakes. The only structural difference
-we know of is that generations $\geq$1 are built by sampling with
-replacement from a size-matched pool ($\approx$63\% distinct sequences),
-whereas generation 0 uses 20{,}000 distinct sequences. We did not isolate the
-cause. A $p{=}0$ control (real data resampled the same way) and a
-without-replacement variant would settle whether resampling, rather than
-synthetic content, drives it; neither was run.
+Healthy later generations learn induction sooner than generation 0 whenever
+the pool contains duplicates: resampling real data alone reproduces the speed-up
+(19 to 5 epochs), while fully synthetic pools without duplicates show none
+(19 to 19). Distinct fresh real data still speeds it up somewhat (19 to 10),
+which we cannot explain.
 
-\subsection*{S4. Qualitative figures}
+\subsection*{S2. All models, and qualitative figures}
+\begin{figure*}[h]
+  \centering
+  \includegraphics[width=0.92\textwidth]{figures/fig_failure_map.png}
+  \caption{Test accuracy of every model in the 41 collapse runs (rows: condition
+  and seed; columns: generation). (b) Mean symbol KL to generation 0 (log scale)
+  against the noise floor.}
+  \label{fig:map}
+\end{figure*}
+
 \begin{figure*}[h]
   \centering
   \includegraphics[width=0.92\textwidth]{figures/attn_extended_collapse_gen0.png}\\[2pt]
@@ -384,11 +400,11 @@ synthetic content, drives it; neither was run.
   \caption{Attention maps for one example (seed 0, extended, $p{=}1$) at
   generation 0 (top, test accuracy 0.994) and generation 9 (bottom, 0.206);
   red boxes mark the correct copy-source label positions for the query (last
-  row). At generation 0 attention is sharply structured, though in most
-  heads the query row puts only modest mass on the red boxes, so we do not
-  claim a single clean induction head from one example; by generation 9
-  every head is diffuse. Generated on the cluster from checkpoints that were
-  not retrieved, so these figures cannot be regenerated locally.}
+  row). At generation 0 attention is sharply structured, though in most heads
+  the query row puts only modest mass on the red boxes, so one example does not
+  show a single clean induction head (the circuit analysis above does); by
+  generation 9 every head is diffuse. Generated on the cluster from checkpoints
+  that were not retrieved, so these figures cannot be regenerated locally.}
   \label{fig:attn}
 \end{figure*}
 
@@ -397,28 +413,19 @@ synthetic content, drives it; neither was run.
   \includegraphics[width=\columnwidth]{figures/embedding_pca_extended_collapse.png}
   \caption{PCA of the symbol-embedding table at generations 0, 5 and 9 (seed 0,
   extended, $p{=}1$). No structure is visible at any generation (symbols are
-  interchangeable by design); the leading component explains less variance
-  later (11.5\% $\to$ 5.2\%), which we do not interpret. A negative,
-  uninformative result.}
+  interchangeable by design). A negative, uninformative result.}
   \label{fig:pca}
 \end{figure}
 
-\subsection*{S5. Not done, and what would strengthen the work}
-None of the following is reflected in the results above. Tooling for each now
-exists in the repository (see \texttt{README.txt}, Section 6g) but had not been
-run when this was written; if it has been, the numbers and Limitations above
-must be updated to match. (1) Per-head ablation (a simplified ACDC-style
-sweep, \texttt{src/circuits.py}) and best-single-head induction scores per
-generation (\texttt{experiments/analyze\_circuits.py}); the gradient-influence
-proxy (\texttt{src/attribution.py}, inspired by Chen et al.) has not been
-applied to the collapse runs. (2) A structure-aware drift measure (label
-consistency for repeated symbols, repeat counts, label injectivity) on each
-generation's training pool, which would test the structural-corruption
-hypothesis directly (\texttt{analyze\_circuits.py}; recorded automatically in
-new runs). (3) Retraining the first failed generation of each failing run with
-early stopping disabled, to settle whether any failure is a delayed transition
-(\texttt{experiments/retrain\_generation.py}). (4) Controls for the duplicate-
-sequence resampling confound ($p{=}0$ with and without resampling, and the
-$p{=}1$ experiment without duplicates), and five more seeds with independent
-real-data pools.
+\subsection*{S3. Not yet done}
+The decisive experiment has not been run: all generations trained with a fixed
+budget and no early stopping, on pools without duplicates, for every condition
+and 8 seeds (configured in \texttt{configs/v2\_*.yaml}, job group \texttt{v2};
+see \texttt{README.txt}, Section 6h). Until it is, the gradual mechanism
+replacement in the main text rests on three runs, and the size of any
+\emph{residual} collapse effect under a sound protocol is unknown. If it has
+been run, the main text must be revised to match. Also open: retraining later (not just first)
+failures to test the propagation explanation; characterising the alternative
+mechanism the ablation results point to; and the gradient-influence proxy
+(\texttt{src/attribution.py}), which has not been applied to the collapse runs.
 \end{document}

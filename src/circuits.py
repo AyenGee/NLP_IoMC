@@ -157,11 +157,11 @@ def layer_ablation_summary(
 ) -> dict:
     """Jointly ablate every head in each layer (rather than one head at a
     time) and report the accuracy drop. Individual-head ablation can
-    under-report a layer's importance if its function is redundantly
-    distributed across heads (as we found for this task's layer-1
-    induction heads: no single one matters much alone, but ablating all of
-    them together collapses accuracy to near chance). Cheap enough (one
-    forward pass per layer) to track across every collapse generation."""
+    under-report a layer's importance if its function is spread over several
+    heads, so this complements head_ablation_sweep (in the healthy models we
+    analysed, ablating the single best layer-1 head alone already cost most of
+    the accuracy, so there is little redundancy). Cheap enough (one forward
+    pass per layer) to track across every collapse generation."""
     model.eval()
     n_layers = len(model.blocks)
     n_heads = model.mcfg.n_heads
