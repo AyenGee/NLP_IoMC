@@ -35,7 +35,7 @@ from data import TaskConfig, SymbolicICLDataset, dataset_to_items, mix_datasets,
 from model import ModelConfig, InductionTransformer
 from metrics import distribution_stats, structure_stats, pool_distinct_fraction
 from train import TrainConfig, train_model, interp_snapshot
-from utils import get_device, CSVLogger, save_json
+from utils import get_device, CSVLogger, save_json, ensure_dir
 
 
 @dataclasses.dataclass
@@ -113,7 +113,7 @@ def run_collapse(
 ) -> Path:
     device = get_device(train_cfg.device)
     out_dir = Path(out_root) / run_name
-    os.makedirs(out_dir, exist_ok=True)  # race-safe: parallel Slurm array tasks create the shared parent concurrently
+    ensure_dir(out_dir)  # race-safe: parallel Slurm array tasks create the shared parent concurrently
     gen_logger = CSVLogger(out_dir / "generations.csv")
     save_json(
         {"task": dataclasses.asdict(tcfg), "model": dataclasses.asdict(mcfg),

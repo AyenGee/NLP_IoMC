@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from data import TaskConfig, load_items
 from model import ModelConfig
 from train import TrainConfig, train_model
+from utils import ensure_dir
 
 FAIL_THRESHOLD = 0.5
 
@@ -82,7 +83,7 @@ def run_case(results: Path, cond: str, seed: int, gen: int, epochs_list: list[in
     tcfg, mcfg, base = TaskConfig(**cfg["task"]), ModelConfig(**cfg["model"]), TrainConfig(**cfg["train"])
     items = load_items(run_dir / f"gen{gen}_data.pt")
     orig = next(r for r in csv.DictReader(open(run_dir / "generations.csv")) if int(r["generation"]) == gen)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    ensure_dir(out_dir)
 
     summary = {
         "cond": cond, "seed": seed, "gen": gen,

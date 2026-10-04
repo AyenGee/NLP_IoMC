@@ -47,6 +47,7 @@ from manifest import CIRCUIT_GROUPS  # noqa: E402
 from circuits import head_ablation_sweep, layer_ablation_summary
 from data import SymbolicICLDataset, collate_batch, load_items, TaskConfig
 from interp import load_checkpoint
+from utils import ensure_dir
 from metrics import attention_entropy, induction_score, induction_offset_scores, best_head_by_offset, prev_token_score, structure_stats
 
 
@@ -105,7 +106,7 @@ def analyze_run(results: Path, run_name: str, n_eval: int = 512) -> list[dict]:
 
 
 def write_csv(rows: list[dict], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(path.parent)
     fields = list(rows[0].keys())
     for r in rows:
         fields += [k for k in r if k not in fields]

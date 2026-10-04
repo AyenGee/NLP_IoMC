@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from data import TaskConfig, make_splits, collate_batch, ListDataset
 from model import InductionTransformer, ModelConfig
 from metrics import compute_losses, perplexity, attention_entropy, induction_score, prev_token_score, induction_offset_scores, best_head_by_offset
-from utils import set_seed, get_device, load_config, CSVLogger, save_json
+from utils import set_seed, get_device, load_config, CSVLogger, save_json, ensure_dir
 
 
 @dataclasses.dataclass
@@ -234,7 +234,7 @@ def train_model(
 
     if train_cfg.ckpt_path:
         ckpt_path = Path(train_cfg.ckpt_path)
-        os.makedirs(ckpt_path.parent, exist_ok=True)  # race-safe under parallel Slurm array tasks
+        ensure_dir(ckpt_path.parent)  # race-safe under parallel Slurm array tasks
         torch.save(
             {
                 "model_state": model.state_dict(),

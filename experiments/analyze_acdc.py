@@ -39,6 +39,7 @@ from manifest import ACDC_GROUPS  # noqa: E402
 from acdc import acdc, describe, relabel_corruption
 from data import SymbolicICLDataset, collate_batch, TaskConfig
 from interp import load_checkpoint
+from utils import ensure_dir
 
 DEFAULT_TAUS = [0.01, 0.05]
 CORRUPTIONS = ["resample", "labels"]
@@ -75,7 +76,7 @@ def analyze_run(results: Path, run_name: str, taus: list[float], n_eval: int, ge
 
 
 def write_csv(rows: list[dict], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(path.parent)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()

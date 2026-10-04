@@ -6,11 +6,27 @@ import csv
 import json
 import os
 import random
+import time
 from pathlib import Path
 
 import numpy as np
 import torch
 import yaml
+
+
+def ensure_dir(path: str | Path, retries: int = 8) -> None:
+    """os.makedirs(path, exist_ok=True) that survives many Slurm array tasks creating the same
+    nested directory at the same instant. On the cluster's shared filesystem a task can see
+    FileNotFoundError (or FileExistsError) from makedirs while another task is mid-creation,
+    even with exist_ok=True; a short retry resolves it."""
+    for attempt in range(retries):
+        try:
+            os.makedirs(path, exist_ok=True)
+            return
+        except (FileNotFoundError, FileExistsError):
+            if attempt == retries - 1:
+                raise
+            time.sleep(0.25 * (attempt + 1))
 
 
 def set_seed(seed: int) -> None:
@@ -39,7 +55,7 @@ class CSVLogger:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        os.makedirs(self.path.parent, exist_ok=True)
+        ensure_dir(self.path.parent)
         self._fieldnames: list[str] | None = None
         if self.path.exists():
             self.path.unlink()
@@ -58,7 +74,7 @@ class CSVLogger:
 
 def save_json(obj, path: str | Path) -> None:
     path = Path(path)
-    os.makedirs(path.parent, exist_ok=True)
+    ensure_dir(path.parent)
     with open(path, "w") as f:
         json.dump(obj, f, indent=2, default=str)
 

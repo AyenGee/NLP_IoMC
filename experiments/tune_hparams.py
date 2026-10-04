@@ -133,7 +133,8 @@ def run_cell(cell: Cell, out_dir: Path, seeds: list[int], epochs: int = BUDGET_E
               f"epoch>0.9={results[-1]['epoch_val_acc_gt_0.9']} ({results[-1]['train_seconds']:.0f}s)")
     out = {"cell": dataclasses.asdict(cell), "name": cell.name, "is_default": cell.is_default,
            "epochs": epochs, "seeds": results}
-    out_dir.mkdir(parents=True, exist_ok=True)
+    from utils import ensure_dir
+    ensure_dir(out_dir)
     with open(out_dir / f"{cell.name}.json", "w") as f:
         json.dump(out, f, indent=2)
     return out

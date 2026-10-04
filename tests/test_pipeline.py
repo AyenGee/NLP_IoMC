@@ -184,6 +184,17 @@ r_ = subprocess.run([PY, str(ROOT / "experiments" / "make_v2_configs.py"), "--ou
 c_ = yaml.safe_load(open(tmp_cfg / "v2_extended_p1.yaml")); hdr = open(tmp_cfg / "v2_extended_p1.yaml").read()
 check("make_v2_configs --set applies overrides to every config and records them in the header", r_.returncode == 0 and c_["train"]["lr"] == 0.003 and c_["model"]["d_model"] == 128 and "train.lr=0.003" in hdr)
 
+# ---------------------------------------------------------------- concurrent directory creation (Slurm arrays)
+import threading
+from utils import ensure_dir
+errs = []
+def _mk(i):
+    try: ensure_dir(SP / "race" / "a" / "b" / "c" / f"d{i % 3}")
+    except Exception as e_: errs.append(repr(e_))
+ths = [threading.Thread(target=_mk, args=(i,)) for i in range(64)]
+[t_.start() for t_ in ths]; [t_.join() for t_ in ths]
+check("ensure_dir survives 64 threads creating the same nested directories", not errs and (SP / "race" / "a" / "b" / "c" / "d0").is_dir(), str(errs[:1]))
+
 # ---------------------------------------------------------------- array-task plumbing
 r = subprocess.run([PY, str(ROOT / "experiments" / "run_array_task.py"), "--group", "controls", "--task-id", "99"], capture_output=True, text=True, cwd=str(ROOT))
 check("run_array_task rejects an out-of-range index with a clear message", r.returncode != 0 and "out of range" in (r.stderr + r.stdout))
