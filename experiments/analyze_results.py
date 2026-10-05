@@ -8,6 +8,8 @@ Reads results/ (written by the cluster jobs / run_all.py), writes
   abstract/figures/fig_failure_map.png   accuracy of every (condition, seed, generation) + KL vs. noise floor
   abstract/figures/fig_training.png      generation-0 learning curves (loss, accuracy, induction score), per seed
   abstract/figures/fig_v2.png            corrected-protocol runs: accuracy per generation per seed, induction score
+  abstract/figures/fig_main_v2.png       main-text figure: accuracy per seed, duplicates vs none vs real-data control vs base
+  abstract/figures/fig_mech_v2.png       main-text figure: induction score, non-classic share, ACDC circuit size
 
 Why per-seed views instead of mean +- std: outcomes are bimodal (a generation's
 model either learns induction, ~100% accuracy, or fails to, ~25%), so a mean
@@ -564,6 +566,125 @@ def v2_summary(results: Path, base: dict) -> dict:
     return out
 
 
+def perm_test_mean_diff(a, b) -> float | None:
+    """Exact two-sided permutation p-value for a difference in means of two small samples (all splits)."""
+    from itertools import combinations
+    a, b = list(a), list(b)
+    if not a or not b:
+        return None
+    pooled, n = a + b, len(a)
+    obs = abs(np.mean(a) - np.mean(b))
+    hits = total = 0
+    for idx in combinations(range(len(pooled)), n):
+        s = set(idx)
+        ga = [pooled[i] for i in idx]
+        gb = [pooled[i] for i in range(len(pooled)) if i not in s]
+        total += 1
+        hits += abs(np.mean(ga) - np.mean(gb)) >= obs - 1e-12
+    return round(hits / total, 4)
+
+
+def _slope(y) -> float:
+    x = np.arange(len(y))
+    return float(np.polyfit(x, y, 1)[0])
+
+
+def v2_contrasts(results: Path) -> dict:
+    """The comparisons the report's claims rest on, for the corrected-protocol runs. A seed whose generation 0 is
+    itself weak (test accuracy < 0.9) starts the chain with a poor generator and is reported separately: with
+    healthy starts, any decline is a property of the recursion, not of one under-trained first model."""
+    if not seeds_for(results, "v2_extended_p1"):
+        return {}
+    conds = [c for c in ["v2_extended_p1", "v2_extended_p1_dups", "v2_extended_p05", "v2_extended_p025", "v2_control_real"] if seeds_for(results, c)]
+    runs = {c: load_collapse(results, c) for c in conds}
+    acc = {c: {s: np.array([fnum(r, "test_acc") for r in runs[c][s]]) for s in runs[c]} for c in conds}
+    ref = runs["v2_extended_p1"]
+    strong = [s for s in sorted(ref) if fnum(ref[s][0], "test_acc") >= 0.9]
+    weak = [s for s in sorted(ref) if s not in strong]
+    out = {"strong_start_seeds": strong, "weak_start_seeds": weak,
+           "weak_start_gen0_acc": {s: round(fnum(ref[s][0], "test_acc"), 4) for s in weak}, "by_condition": {}}
+    if not strong:
+        out["note"] = "no seed has a healthy generation 0, so there is nothing to contrast"
+        return out
+    for c in conds:
+        a = acc[c]
+        sub = {s: a[s] for s in strong if s in a}
+        later = np.array([v[1:] for v in sub.values()])
+        final = {s: round(float(v[-1]), 4) for s, v in sub.items()}
+        slopes = {s: round(_slope(v[1:]), 5) for s, v in sub.items()}
+        entry = {"n_seeds": len(sub), "failed_trainings": int((later < FAIL_THRESHOLD).sum()), "trainings": int(later.size),
+                 "trainings_below_0.9": int((later < 0.9).sum()), "mean_acc_gen_ge1": round(float(later.mean()), 4),
+                 "final_gen_acc_by_seed": final, "mean_final_gen_acc": round(float(np.mean(list(final.values()))), 4),
+                 "min_final_gen_acc": round(float(min(final.values())), 4),
+                 "slope_per_generation_by_seed": slopes, "mean_slope_per_generation": round(float(np.mean(list(slopes.values()))), 5),
+                 "seeds_with_final_acc_lt_0.99": int(sum(v < 0.99 for v in final.values())),
+                 "median_acc_by_gen": np.median(np.array(list(sub.values())), axis=0).round(4).tolist()}
+        wk = {s: [round(float(x), 3) for x in a[s]] for s in weak if s in a}
+        if wk:
+            entry["weak_start_seed_acc_by_gen"] = wk
+        if sub and all(runs[c][x][0].get("induction_off0_max", "") != "" for x in sub):
+            cl = np.array([[fnum(r, "induction_score_max") for r in runs[c][x]] for x in sub])
+            anyo = np.array([[max(fnum(r, "induction_score_max"), fnum(r, "induction_off0_max"), fnum(r, "induction_off2_max")) for r in runs[c][x]] for x in sub])
+            entry["median_classic_score_by_gen"] = np.median(cl, axis=0).round(3).tolist()
+            entry["median_best_of_offsets_score_by_gen"] = np.median(anyo, axis=0).round(3).tolist()
+        out["by_condition"][c] = entry
+    ctrl = out["by_condition"].get("v2_control_real")
+    if ctrl:
+        out["permutation_tests_final_gen_acc_strong_seeds"] = {}
+        for c in conds:
+            if c != "v2_control_real":
+                out["permutation_tests_final_gen_acc_strong_seeds"][f"{c}_vs_control"] = perm_test_mean_diff(
+                    out["by_condition"][c]["final_gen_acc_by_seed"].values(), ctrl["final_gen_acc_by_seed"].values())
+        if "v2_extended_p1" in conds and "v2_extended_p1_dups" in conds:
+            out["permutation_tests_final_gen_acc_strong_seeds"]["dups_vs_nodups_at_p1"] = perm_test_mean_diff(
+                out["by_condition"]["v2_extended_p1_dups"]["final_gen_acc_by_seed"].values(),
+                out["by_condition"]["v2_extended_p1"]["final_gen_acc_by_seed"].values())
+    # Mechanism: accurate models of generations >= 1 whose best head is not classic, against the control
+    rows = [r for r in circuit_rows(results) if r["eval_acc"] >= 0.9 and r["gen"] >= 1]
+    if rows:
+        share = {}
+        for c in conds:
+            sub = [r for r in rows if r["cond"] == c and r["seed"] in strong]
+            if sub:
+                share[c] = {"n_accurate": len(sub), "non_classic": int(sum(_mech(r) == "alt" for r in sub)),
+                            "share": round(float(np.mean([_mech(r) == "alt" for r in sub])), 3)}
+        out["non_classic_share_accurate_gen_ge1_strong_seeds"] = share
+        if "v2_extended_p1" in share and "v2_control_real" in share:
+            a_, b_ = share["v2_extended_p1"], share["v2_control_real"]
+            out["non_classic_share_fisher_p1_vs_control"] = round(fisher_exact_p(a_["non_classic"], a_["n_accurate"] - a_["non_classic"],
+                                                                                  b_["non_classic"], b_["n_accurate"] - b_["non_classic"]), 5)
+        v2rows = [r for r in rows if r["cond"] in V2_CONDS and _family(r) is not None]
+        out["accuracy_by_family_v2_accurate_gen_ge1"] = {f: {"n": int(sum(_family(r) == f for r in v2rows)),
+                                                              "mean_acc": round(float(np.mean([r["eval_acc"] for r in v2rows if _family(r) == f])), 4)}
+                                                         for f in ["classic", "shifted", "match"] if any(_family(r) == f for r in v2rows)}
+    return out
+
+
+def base_failure_summary(results: Path) -> dict:
+    """Base variant: is a failure preceded by a corrupted pool? For the first failing generation of each run, the
+    share of its training pool whose query label is correct (1.0 = a clean pool), and what the failed model then
+    does to the next pool (an absorbing failure)."""
+    out = {}
+    for cond in [c for c in ["v2_base_p1", "base_collapse"] if seeds_for(results, c)]:
+        runs = load_collapse(results, cond)
+        per = {}
+        for s in sorted(runs):
+            rows = runs[s]
+            g = next((i for i, r in enumerate(rows) if fnum(r, "test_acc") < FAIL_THRESHOLD), None)
+            if g is None or "pool_frac_query_label_ok" not in rows[0] or rows[0]["pool_frac_query_label_ok"] == "":
+                per[s] = {"first_failure_gen": g}
+                continue
+            per[s] = {"first_failure_gen": g, "pool_label_ok_at_first_failure": round(fnum(rows[g], "pool_frac_query_label_ok"), 4),
+                      "pool_label_ok_next_gen": round(fnum(rows[g + 1], "pool_frac_query_label_ok"), 4) if g + 1 < len(rows) else None,
+                      "recovered_later": bool(any(fnum(r, "test_acc") >= 0.9 for r in rows[g + 1:]))}
+        clean = [v for v in per.values() if v.get("pool_label_ok_at_first_failure") is not None]
+        out[cond] = {"per_seed": per, "seeds_failing": len(clean),
+                     "failures_whose_pool_had_every_label_correct": int(sum(v["pool_label_ok_at_first_failure"] >= 0.9999 for v in clean if v["first_failure_gen"] >= 1)),
+                     "failures_at_generation_ge1": int(sum(v["first_failure_gen"] >= 1 for v in clean)),
+                     "failed_at_generation_0": [s for s, v in per.items() if v.get("first_failure_gen") == 0]}
+    return out
+
+
 def tuning_summary(results: Path) -> dict:
     """Hyper-parameter study (experiments/tune_hparams.py), if its outputs are present."""
     if not (results / "tuning").is_dir() or not list((results / "tuning").glob("*.json")):
@@ -801,6 +922,87 @@ def fig_v2(results: Path, figdir: Path):
     plt.close(fig)
 
 
+def fig_main_v2(results: Path, figdir: Path):
+    """Main-text figure: test accuracy by generation, one line per seed, for the factorial's two ends, the real-data
+    control and the base variant. Seeds whose generation 0 is already weak are drawn dotted."""
+    needed = ["v2_extended_p1", "v2_extended_p1_dups", "v2_control_real", "v2_base_p1"]
+    if not all(seeds_for(results, c) for c in needed):
+        return
+    style()
+    weak = [s for s in seeds_for(results, "v2_extended_p1") if fnum(load_collapse(results, "v2_extended_p1")[s][0], "test_acc") < 0.9]
+    panels = [("v2_extended_p1_dups", "(a) extended, p=1, duplicates kept"), ("v2_extended_p1", "(b) extended, p=1, no duplicates"),
+              ("v2_control_real", "(c) real data only (control)"), ("v2_base_p1", "(d) base, p=1, no duplicates")]
+    fig, axes = plt.subplots(1, 4, figsize=(7.0, 1.75), sharey=True)
+    for ax, (cond, title) in zip(axes, panels):
+        runs = load_collapse(results, cond)
+        for s in sorted(runs):
+            acc = [fnum(r, "test_acc") for r in runs[s]]
+            is_weak = (s in weak) and cond != "v2_base_p1"
+            ax.plot(range(len(acc)), acc, color=COLOR[cond], lw=0.9, alpha=0.9 if is_weak else 0.75, ls=":" if is_weak else "-",
+                    marker="o", ms=1.4)
+        ax.axhline(0.25, color="gray", ls=":", lw=0.7)
+        ax.set_title(title, fontsize=6.3)
+        ax.set_xlabel("generation")
+        ax.set_ylim(0, 1.04)
+    axes[0].set_ylabel("test accuracy")
+    if weak:
+        axes[1].text(9, 0.12, f"dotted: seed {', '.join(map(str, weak))}\n(weak generation 0)", fontsize=5, ha="right", va="center", color="#444")
+    fig.tight_layout(pad=0.4, w_pad=0.5)
+    fig.savefig(figdir / "fig_main_v2.png", dpi=220)
+    plt.close(fig)
+
+
+def fig_mech_v2(results: Path, figdir: Path):
+    """Main-text figure: the induction circuit across generations. (a) classic score (label after an earlier
+    occurrence) vs the best score over three offsets; (b) share of accurate models without a classic head; (c) size of the
+    ACDC circuit (label corruption) by head family."""
+    if not seeds_for(results, "v2_extended_p1"):
+        return
+    style()
+    contr = v2_contrasts(results)
+    strong = contr.get("strong_start_seeds", [])
+    fig, axes = plt.subplots(1, 3, figsize=(7.0, 1.85), gridspec_kw={"width_ratios": [1.15, 1, 1]})
+    ax = axes[0]
+    for cond, label in [("v2_extended_p1", "p=1"), ("v2_control_real", "real data")]:
+        if not seeds_for(results, cond):
+            continue
+        runs = load_collapse(results, cond)
+        ss = [s for s in sorted(runs) if s in strong]
+        if not ss or runs[ss[0]][0].get("induction_off0_max", "") == "":
+            continue
+        classic = np.median([[fnum(r, "induction_score_max") for r in runs[s]] for s in ss], axis=0)
+        anyoff = np.median([[max(fnum(r, "induction_score_max"), fnum(r, "induction_off0_max"), fnum(r, "induction_off2_max")) for r in runs[s]] for s in ss], axis=0)
+        ax.plot(range(len(classic)), classic, color=COLOR[cond], marker="o", ms=2, lw=1.0, label=f"{label}: classic (offset 1)")
+        ax.plot(range(len(anyoff)), anyoff, color=COLOR[cond], marker="s", ms=2, lw=1.0, ls="--", label=f"{label}: best of offsets 0-2")
+    ax.set_ylim(0, 1.04); ax.set_xlabel("generation"); ax.set_ylabel("best-head score (median)")
+    ax.legend(frameon=False, fontsize=4.9, loc="center left", bbox_to_anchor=(0.0, 0.47)); ax.set_title("(a) induction score", fontsize=6.5)
+
+    ax = axes[1]
+    share = contr.get("non_classic_share_accurate_gen_ge1_strong_seeds", {})
+    order = [c for c in ["v2_control_real", "v2_extended_p025", "v2_extended_p05", "v2_extended_p1", "v2_extended_p1_dups"] if c in share]
+    names = {"v2_control_real": "real", "v2_extended_p025": "p=.25", "v2_extended_p05": "p=.5", "v2_extended_p1": "p=1", "v2_extended_p1_dups": "p=1\ndups"}
+    if order:
+        ax.bar(range(len(order)), [share[c]["share"] for c in order], color=[COLOR[c] for c in order], width=0.65)
+        for i, c in enumerate(order):
+            ax.text(i, share[c]["share"] + 0.02, f"{share[c]['non_classic']}/{share[c]['n_accurate']}", ha="center", fontsize=5)
+        ax.set_xticks(range(len(order))); ax.set_xticklabels([names[c] for c in order], fontsize=5.5)
+    ax.set_ylim(0, 0.85); ax.set_ylabel("share without a classic head"); ax.set_title("(b) accurate models, gen. >= 1", fontsize=6.5)
+
+    ax = axes[2]
+    fam = acdc_summary(results).get("by_corruption_tau", {}).get("labels@0.01", {}).get("by_family", {})
+    fams = [f for f in ["classic", "shifted", "match"] if f in fam]
+    if fams:
+        ax.bar(range(len(fams)), [fam[f]["mean_live_edges"] for f in fams], color=["#0072B2", "#E69F00", "#CC79A7"][:len(fams)], width=0.6)
+        for i, f in enumerate(fams):
+            ax.text(i, fam[f]["mean_live_edges"] + 1, f"n={fam[f]['n']}\nacc {fam[f]['mean_circuit_acc']:.3f}", ha="center", fontsize=5)
+        ax.set_xticks(range(len(fams))); ax.set_xticklabels(fams, fontsize=6)
+        ax.set_ylim(0, max(fam[f]["mean_live_edges"] for f in fams) * 1.3)
+    ax.set_ylabel("edges in ACDC circuit (of 110)"); ax.set_title("(c) circuit size by head type", fontsize=6.5)
+    fig.tight_layout(pad=0.4, w_pad=0.7)
+    fig.savefig(figdir / "fig_mech_v2.png", dpi=220)
+    plt.close(fig)
+
+
 def fig_failure_map(results: Path, figdir: Path, floor: float):
     style()
     order = present_conds(results)
@@ -854,6 +1056,8 @@ def main():
     summary["factorial"] = factorial_summary(results)
     summary["v2"] = v2_summary(results, summary["collapse"])
     summary["tuning"] = tuning_summary(results)
+    summary["v2_contrasts"] = v2_contrasts(results)
+    summary["base_failures"] = base_failure_summary(results)
     summary["acdc"] = acdc_summary(results)
     # Marginal symbol KL of the pool a model was trained on, at that model's FIRST failure, in units of the noise floor.
     floor = summary["reference"]["symbol_kl_noise_floor_mean"]
@@ -878,6 +1082,8 @@ def main():
     fig_failure_map(results, figdir, summary["reference"]["symbol_kl_noise_floor_mean"])
     fig_training(results, figdir)
     fig_v2(results, figdir)
+    fig_main_v2(results, figdir)
+    fig_mech_v2(results, figdir)
     for cond, e in summary["collapse"].items():
         print(f"{LABEL[cond]:24s} seeds={e['seeds']} failed {e['failed_trainings_gen_ge1']}/{e['n_trainings_gen_ge1']} | seeds failing: {e['seeds_with_any_failure']} | "
               f"first failure gen: {e['first_failure_gen_by_seed']} | final acc: {e['final_gen_acc_by_seed']} | recovered: {e['recovered_after_failure_by_seed']}")

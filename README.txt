@@ -353,8 +353,17 @@ See slurm/ for the job scripts used below.
           unpack into the repo, then locally:
             python experiments/analyze_results.py
           which writes results/analysis_summary.json (every number to quote)
-          and the figures in abstract/figures/. Keep results/ and
-          cluster_run/slurm logs in the submission archive (they are not in git).
+          and the figures in abstract/figures/, then
+            python experiments/make_tex_tables.py
+          which writes the abstract's tables (abstract/tables/*.tex) from that
+          summary. Rebuild abstract/main.tex (Overleaf: upload the abstract/
+          folder and ethics/) and check the two-page limit. Keep results/ and the
+          Slurm logs in the submission archive (they are not in git).
+
+       Results of the run described in the abstract: tuning jobs 63405 (+63555),
+       corrected runs 63867, circuit scores 64119, ACDC 64130, v2 retraining
+       64133, figures 64134. Everything in the abstract is reproduced by stages
+       0-4 above.
 
 Etiquette reminders (from the cluster's own onboarding material): never
 run real computation on the login node, request only the resources you

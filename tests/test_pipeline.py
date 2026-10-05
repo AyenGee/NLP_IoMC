@@ -303,6 +303,7 @@ check("Fisher exact p for a perfectly separated 10 vs 10 table is 2/C(20,10)", a
 check("Fisher exact p is 1 for identical groups", abs(ar.fisher_exact_p(3, 7, 3, 7) - 1.0) < 1e-9)
 w = ar.wilson(0, 10); check("Wilson interval for 0/10 is [0, ~0.28]", w[0] == 0.0 and abs(w[1] - 0.2775) < 0.002, str(w))
 w = ar.wilson(5, 10); check("Wilson interval for 5/10 is ~[0.24, 0.76]", abs(w[0] - 0.237) < 0.003 and abs(w[1] - 0.763) < 0.003, str(w))
+check("exact permutation test: identical samples give p=1, fully separated 4 vs 4 gives 2/70", ar.perm_test_mean_diff([1, 2, 3, 4], [1, 2, 3, 4]) == 1.0 and abs(ar.perm_test_mean_diff([1, 2, 3, 4], [10, 11, 12, 13]) - round(2 / 70, 4)) < 1e-9)
 check("Spearman is 1 for a monotone relation and -1 for a reversed one", ar.spearman([1, 2, 3, 4], [10, 20, 30, 40]) == 1.0 and ar.spearman([1, 2, 3, 4], [4, 3, 2, 1]) == -1.0)
 import retrain_generation as rg
 only_v2, no_v2 = rg.failing_cases(RES, prefix="v2_"), rg.failing_cases(RES, exclude_prefix="v2_")
@@ -320,6 +321,10 @@ check("summary has the v2 conditions, the 2x2 factorial and the generation-0 tra
 check("generation-0 training table reports train/val/test accuracy and perplexity", all(k in S["training_gen0"]["extended"]["mean_std_all_seeds"] for k in ["final_train_acc", "final_val_acc", "test_acc", "test_ppl", "final_val_loss"]))
 check("ACDC summary appears once ACDC CSVs exist", S["acdc"] and "resample@0.05" in S["acdc"]["by_corruption_tau"] and "labels@0.05" in S["acdc"]["by_corruption_tau"])
 check("the v2 figure and the training-curve figure were written", (SP / "figs_test" / "fig_v2.png").exists() and (SP / "figs_test" / "fig_training.png").exists())
+r_ = subprocess.run([PY, str(ROOT / "experiments" / "make_tex_tables.py"), "--summary", str(RES / "analysis_summary.json"), "--out", str(SP / "tex_tables")], capture_output=True, text=True, cwd=str(ROOT))
+check("make_tex_tables runs on a results summary (skipping tables whose results are absent) and writes LaTeX", r_.returncode == 0 and (SP / "tex_tables" / "tab_factorial.tex").exists() and "\\begin{tabular}" in (SP / "tex_tables" / "tab_factorial.tex").read_text(), r_.stderr[-300:])
+check("the two main-text figures of the corrected-protocol story were written", (SP / "figs_test" / "fig_main_v2.png").exists() and (SP / "figs_test" / "fig_mech_v2.png").exists())
+check("v2 contrasts (tolerating runs with no healthy start) and base-failure summaries are in the summary", "strong_start_seeds" in S["v2_contrasts"] and "v2_base_p1" in S["base_failures"])
 
 # ---------------------------------------------------------------- the real results must be untouched
 real_after = snapshot(ROOT / "results")
