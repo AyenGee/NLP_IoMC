@@ -406,6 +406,16 @@ need, test small before scaling up, and clean up files you don't need.
 
 8. SCOPE DEVIATIONS FROM THE LITERAL PROJECT BRIEF
 ------------------------------------------------------
+  - The task is ADAPTED from Singh et al. (2024), not a copy of their setup.
+    Theirs (checked against the paper): Omniglot images through a frozen
+    ResNet18 (most experiments: 50 classes, 1 exemplar each), a 2-way 1-shot
+    context of 2 exemplar-label pairs, a 2-layer attention-only transformer with
+    8 heads per layer, RoPE, Adam at 1e-5, batch 32. Ours: K=64 integer symbols,
+    L=8 labels, 4 symbols repeated 3 times (12 context pairs), a 2-layer, 4-head
+    transformer with MLPs and learned positions, AdamW at 1e-3 with a cosine
+    schedule, batch 128. What is preserved is the induction requirement: labels
+    are redrawn per sequence, so only copying from the context solves it, and the
+    loss of the base variant is on the last token only.
   - Exemplars are integer symbol IDs, not Omniglot character images. The
     image encoder in Singh et al. (2024) is an implementation detail for
     perceptual realism; the induction-head mechanism this project studies

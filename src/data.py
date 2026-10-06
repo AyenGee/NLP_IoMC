@@ -10,12 +10,17 @@ cannot be solved by memorising a global exemplar->label table -- it can only
 be solved by finding the matching earlier occurrence in-context and copying
 its label (induction).
 
-Simplification vs. Singh et al. (2024): exemplars are plain integer symbol
-IDs (drawn from a vocabulary of size K) rather than Omniglot character
-images. This is a deliberate scope decision -- the image encoder is an
-implementation detail for realism, not something the induction-head
-mechanism depends on, and a symbolic vocabulary is much easier to control
-and interpret. This should be noted explicitly in the write-up.
+Differences from Singh et al. (2024), whose task this is ADAPTED from: their
+exemplars are Omniglot images (frozen ResNet18 embeddings; in most of their
+experiments 50 classes with a single exemplar each, i.e. one fixed vector per
+class), and each sequence is 2-way 1-shot (2 context pairs). Here exemplars
+are plain integer symbol IDs (vocabulary of size K) and a sequence repeats
+n_classes symbols `burstiness` times (12 context pairs by default). The
+induction requirement is the same -- labels are redrawn per sequence -- and
+the integer symbols play the role of their fixed per-class vectors. The
+image encoder is not something the induction-head mechanism depends on, and
+a symbolic vocabulary is much easier to control and interpret. See README
+Section 8 for the full list, including the model and optimiser differences.
 
 Sequence layout (token stream fed to the model):
     s_1, l_1, s_2, l_2, ..., s_m, l_m, s_query

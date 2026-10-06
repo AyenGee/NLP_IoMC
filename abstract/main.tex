@@ -83,7 +83,7 @@ generation $n$ to samples from generation $n{-}1$ erodes the tails of the learne
 distribution, measured through output statistics; the model's internals are little
 studied. We study the \emph{induction head}, a previous-token head feeding a later
 head that attends to what followed an earlier occurrence of the current token and
-copies it \citep{olsson2022incontext}, on the few-shot task of
+copies it \citep{olsson2022incontext}, on a few-shot task adapted from
 \citet{singh2024needs}, where per-sequence relabelling forbids memorisation. ACDC
 \citep{conmy2023towards} finds circuits by patching graph edges; mechanistic data
 attribution \citep{chen2026mechanistic} traces them to training data (not
@@ -94,8 +94,9 @@ circuit, and how much of the apparent damage is real?}
 \looseness=-1
 \textbf{Task and model.} A sequence shows 4 of $K{=}64$ symbols, 3 times each in
 random order, each with a label ($L{=}8$) drawn afresh per sequence; the target is
-the query symbol's label (symbol IDs replace Omniglot). A 2-layer, 4-head, $d{=}64$
-transformer trains on 20{,}000 sequences; validation and test sets (800 each) come
+the query symbol's label. Unlike \citet{singh2024needs}, symbol IDs replace Omniglot
+images, the context has 12 pairs rather than 2, and the 2-layer, 4-head, $d{=}64$
+model has MLPs. It trains on 20{,}000 sequences; validation and test sets (800 each) come
 from the true task. \emph{Base}: loss on the query label only. \emph{Extended}:
 auxiliary heads also predict the next symbol and its label, so it can generate
 sequences. Hyper-parameters were compared on validation accuracy over 30
