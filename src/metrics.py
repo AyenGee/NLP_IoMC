@@ -33,6 +33,14 @@ LN2 = math.log(2.0)
 PLATEAU_EXIT_LOSS = LN2 - 0.1
 PHASE_ACC = 0.9
 
+# Weights of the extended model's three losses (lq, S2, l_S2). DECISION (deviates from the plan's "equally weighted"): the two
+# AUXILIARY losses are weighted 0.1. With weight 1 the 50-way S2 loss (identify a training class, an in-weights task) breaks the
+# copying circuit: held-out-label-pair accuracy 0.27-0.55 at every learning rate and budget tried (lr 1e-5 up to 100,000 steps,
+# 1e-4, 3e-4), induction strength ~0. With weights (1, 0.1, 0.1) the extended model reaches its Bayes-optimal S2 accuracy AND the
+# paper's circuit at lr 1e-5, 3e-5 and 1e-4 (copy 0.98-1.0, induction strength 0.87-0.95). Weights (1, 0.1, 1) and (1, 0.3, 1) also
+# work, (1, 0.5, 1) partly (copy 0.69), (1, 1, 0) and (1, 1, 1) do not. Evidence: results/exact/tuning_table.md and the lw_* runs.
+EXTENDED_LOSS_WEIGHTS = (1.0, 0.1, 0.1)
+
 # Bayes-optimal accuracies of the extended targets under REAL data (see data.py): lq 1.0, S2 0.5, l_S2 1.0.
 BAYES_OPTIMAL = {"acc_q": 1.0, "acc_s2": 0.5, "acc_ls2": 1.0}
 
@@ -51,15 +59,15 @@ def _ce(logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return F.cross_entropy(logits[ok], target[ok])
 
 
-def loss_terms(out: dict, batch, extended: bool) -> dict:
+def loss_terms(out: dict, batch, extended: bool, weights: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> dict:
     """Cross-entropy of each target. ``loss`` is the training objective: the query label only (base), or
-    CE(lq) + CE(S2) + CE(l_S2), equally weighted (extended)."""
+    w_q CE(lq) + w_s2 CE(S2) + w_ls2 CE(l_S2) (extended); the plan's objective is the equally weighted sum (the default)."""
     terms = {"loss_q": _ce(out["label_logits_q"], batch.query_label)}
     total = terms["loss_q"]
     if extended:
         terms["loss_s2"] = _ce(out["symbol_logits"], batch.s2_class)
         terms["loss_ls2"] = _ce(out["label_logits_s2"], batch.s2_label)
-        total = terms["loss_q"] + terms["loss_s2"] + terms["loss_ls2"]
+        total = weights[0] * terms["loss_q"] + weights[1] * terms["loss_s2"] + weights[2] * terms["loss_ls2"]
     terms["loss"] = total
     return terms
 

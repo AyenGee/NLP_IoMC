@@ -43,6 +43,7 @@ class TrainConfig:
     ckpt_path: str | None = None
     ckpt_steps: tuple[int, ...] = ()        # extra checkpoints at these steps (e.g. before / during / after the phase change)
     mlp_ratio: float | None = None
+    loss_weights: tuple[float, float, float] = M.EXTENDED_LOSS_WEIGHTS   # extended: weights of CE(lq), CE(S2), CE(l_S2); see metrics.py (the plan said equal)
     n_heads: int = 8
     d_model: int = 64
     verbose: bool = True
@@ -124,7 +125,7 @@ def train_model(cfg: TrainConfig, features: torch.Tensor | None = None, pool: np
         model.train()
         b = sampler.next_batch(cfg.batch_size)
         out = model(b.ex, b.labels)
-        terms = M.loss_terms(out, b, cfg.extended)
+        terms = M.loss_terms(out, b, cfg.extended, cfg.loss_weights)
         opt.zero_grad(set_to_none=True)
         terms["loss"].backward()
         opt.step()

@@ -36,6 +36,7 @@ def main():
     ap.add_argument("--ckpt-steps", type=int, nargs="*")
     ap.add_argument("--mlp-ratio", type=float)
     ap.add_argument("--n-threads", type=int)
+    ap.add_argument("--loss-weights", type=float, nargs=3, metavar=("W_Q", "W_S2", "W_LS2"), help="extended: weights of the three losses (default 1 1 1)")
     args = ap.parse_args()
 
     fields = {f.name for f in dataclasses.fields(TrainConfig)}
@@ -46,6 +47,8 @@ def main():
             kw[key] = getattr(args, flag)
     if args.steps is not None:
         kw["sequences"] = None                      # an explicit step budget replaces the default sequence budget
+    if args.loss_weights is not None:
+        kw["loss_weights"] = tuple(args.loss_weights)
     if args.ckpt_steps is not None:
         kw["ckpt_steps"] = tuple(args.ckpt_steps)
     name = args.name or f"{kw.get('variant', 'base')}_s{kw.get('seed', 0)}"

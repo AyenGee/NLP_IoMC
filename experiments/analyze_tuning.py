@@ -12,7 +12,18 @@ Operational definition of "same circuit" (documented thresholds, CIRCUIT_*):
     copy generalises   mean accuracy on test_relabel (held-out label pairs) >= CIRCUIT_COPY_ACC
     induction heads    best layer-2 induction strength >= CIRCUIT_INDUCTION in every seed
 (the base model at the paper's lr reaches 0.96-0.99 and 0.71-0.84).
-The 1e-5 cells are the generation-0 runs; the extended lr 1e-4 seed 0 cell is the earlier diagnostic run of identical configuration.
+The 1e-5 cells are the generation-0 runs.
+
+Variants analysed
+    base             the paper's task and loss
+    extended         the extended model with the AUXILIARY losses weighted 0.1 (src/metrics.py EXTENDED_LOSS_WEIGHTS); this is the model
+                     the collapse experiments use
+    extended_equal   the extended model with the plan's EQUAL loss weights, kept as evidence: it does not form the paper's circuit at any
+                     learning rate (lr 3e-5 was not run); not eligible for selection
+
+Selection rule (the plan: "selection by validation accuracy and time to the phase change; a larger lr may be used if it gives the same final
+validation accuracy and the same circuit"): among learning rates that (i) give the same circuit, (ii) show the phase change in every seed, keep
+those whose mean validation accuracy is within VAL_TOL (0.02) of the best such lr, and select the one with the earliest median phase change.
 """
 
 from __future__ import annotations
@@ -47,22 +58,20 @@ SEEDS = [0, 1, 2]
 SETS = ["train_eval", "val", "test_exemplars", "test_relabel", "test_class_ex0"]
 CIRCUIT_COPY_ACC = 0.9
 CIRCUIT_INDUCTION = 0.3
-
-
-def run_name(variant: str, lr: float, seed: int) -> str:
-    if lr == 1e-5:
-        return f"gen0_{variant}_s{seed}"
-    if variant == "extended" and lr == 1e-4 and seed == 0:
-        return "diag_extended_lr1e-4_s0"
-    return f"tune_{variant}_lr{lr:g}_s{seed}".replace("e-05", "e-05")
+VAL_TOL = 0.02
+VARIANTS = ("base", "extended", "extended_equal")
 
 
 def candidates(variant: str, lr: float, seed: int) -> list[str]:
-    s = {0.00003: "0.00003", 0.0001: "0.0001", 0.0003: "0.0003"}.get(lr)
-    names = [run_name(variant, lr, seed)]
-    if s:
-        names.append(f"tune_{variant}_lr{s}_s{seed}")
-    return names
+    """Run names for a (variant, lr, seed) cell; the first that has a log is used."""
+    t = {3e-5: "0.00003", 1e-4: "0.0001", 3e-4: "0.0003"}.get(lr)
+    if variant == "base":
+        return [f"gen0_base_s{seed}"] if lr == 1e-5 else [f"tune_base_lr{t}_s{seed}"]
+    if variant == "extended":
+        return [f"gen0w_extended_s{seed}"] if lr == 1e-5 else [f"tunew_extended_lr{t}_s{seed}"]
+    if lr == 1e-5:                                   # extended_equal
+        return [f"gen0_extended_s{seed}"]
+    return [f"tune_extended_lr{t}_s{seed}"] + (["diag_extended_lr1e-4_s0"] if (lr == 1e-4 and seed == 0) else [])
 
 
 def read_log(path: Path) -> list[dict]:
@@ -118,8 +127,8 @@ def cell(results: Path, variant: str, lr: float, evals: EvalSets) -> dict | None
 def analysis(results: Path) -> dict:
     feats = D.OmniglotFeatures().tensor
     summary = {"lrs": LRS, "thresholds": {"copy_acc": CIRCUIT_COPY_ACC, "induction": CIRCUIT_INDUCTION}, "variants": {}}
-    for variant in ("base", "extended"):
-        evals = EvalSets(feats, variant == "extended")
+    for variant in VARIANTS:
+        evals = EvalSets(feats, variant.startswith("extended"))
         cells = {}
         for lr in LRS:
             c = cell(results, variant, lr, evals)
@@ -127,8 +136,10 @@ def analysis(results: Path) -> dict:
                 cells[f"{lr:g}"] = c
         eligible = {k: c for k, c in cells.items() if c["same_circuit"] and c["n_seeds_phase_change"] == c["n_seeds"]}
         best = None
-        if eligible:
-            best = max(eligible, key=lambda k: (round(eligible[k]["mean_final_acc"]["val"], 2), -(eligible[k]["median_train_acc_gt_0.9_step"] or 1e9)))
+        if eligible and variant != "extended_equal":
+            top = max(c["mean_final_acc"]["val"] for c in eligible.values())
+            near = {k: c for k, c in eligible.items() if c["mean_final_acc"]["val"] >= top - VAL_TOL}
+            best = min(near, key=lambda k: near[k]["median_train_acc_gt_0.9_step"] or 1e9)
         summary["variants"][variant] = {"cells": cells, "eligible_lrs": sorted(eligible), "selected_lr": best}
     return summary
 
@@ -136,19 +147,21 @@ def analysis(results: Path) -> dict:
 def table_md(summary: dict) -> str:
     lines = []
     for variant, v in summary["variants"].items():
-        lines += [f"### {variant}", "", "| lr | seeds | phase change (train acc > 0.9), steps | train | val | test classes (ex 0) | held-out pairs (copy) | best induction strength | same circuit |", "|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"### {variant}", "", "| lr | seeds | phase change (train acc > 0.9), steps | train | val | test classes (ex 0) | held-out pairs (copy) | best induction strength | zero all L2 | cut L1 direct | max single-head drop | same circuit |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for k, c in v["cells"].items():
             m = c["mean_final_acc"]
             steps = ", ".join("none" if x is None else str(int(x)) for x in c["train_acc_gt_0.9_steps"])
-            lines.append(f"| {k} | {c['n_seeds']} | {steps} | {m['train_eval']:.3f} | {m['val']:.3f} | {m['test_class_ex0']:.3f} | {m['test_relabel']:.3f} | {c['mean_ind_max']:.2f} (min {c['min_ind_max']:.2f}) | {'yes' if c['same_circuit'] else 'NO'} |")
+            ab = [p["ablation"] for p in c["per_seed"].values() if "ablation" in p]
+            abm = (lambda key: f"{np.mean([a[key] for a in ab]):.3f}") if ab else (lambda key: "-")
+            lines.append(f"| {k} | {c['n_seeds']} | {steps} | {m['train_eval']:.3f} | {m['val']:.3f} | {m['test_class_ex0']:.3f} | {m['test_relabel']:.3f} | {c['mean_ind_max']:.2f} (min {c['min_ind_max']:.2f}) | {abm('zero_all_L2')} | {abm('cut_L1_direct')} | {abm('max_single_head_drop')} | {'yes' if c['same_circuit'] else 'NO'} |")
         lines += ["", f"Eligible learning rates: {v['eligible_lrs']}; selected: {v['selected_lr']}", ""]
     return "\n".join(lines)
 
 
 def fig_tuning(results: Path, figdir: Path):
     style()
-    fig, axes = plt.subplots(2, 4, figsize=(7.0, 3.8), sharex=True)
-    for i, variant in enumerate(("base", "extended")):
+    fig, axes = plt.subplots(3, 4, figsize=(7.0, 5.2), sharex=True)
+    for i, variant in enumerate(VARIANTS):
         for lr in LRS:
             first = True
             for seed in SEEDS:

@@ -55,6 +55,7 @@ class CollapseConfig:
     sequences: int | None = 1_000_000       # per-generation budget (or steps)
     steps: int | None = None
     lr: float = 1e-5
+    loss_weights: tuple[float, float, float] = M.EXTENDED_LOSS_WEIGHTS   # extended variant only (see metrics.py)
     eval_every: int = 250
     gen_batch_size: int = 2048
     out_dir: str = "results/exact/collapse/run"
@@ -179,7 +180,7 @@ def run_collapse(cfg: CollapseConfig, features: torch.Tensor | None = None, verb
         stats = pool_stats(pool, cfg.variant, ref_hist)
 
         tcfg = TrainConfig(variant=cfg.variant, steps=cfg.steps, sequences=None if cfg.steps is not None else cfg.sequences,
-                           lr=cfg.lr, eval_every=cfg.eval_every, seed=cfg.seed, data_seed=1000 * cfg.seed + g,
+                           lr=cfg.lr, loss_weights=tuple(cfg.loss_weights), eval_every=cfg.eval_every, seed=cfg.seed, data_seed=1000 * cfg.seed + g,
                            log_path=str(out / f"gen{g}_train.csv"), ckpt_path=str(out / f"gen{g}_model.pt"), verbose=False)
         res = train_model(tcfg, features=features, pool=pool, evals=evals)
         model_prev = res["model"]

@@ -161,6 +161,10 @@ check("attention entropy is 0 for one-hot rows", abs(m_ok["ent_L1H0"]) < 1e-6)
 # ------------------------------------------------------------------ training: configuration and a tiny end-to-end run
 c = TrainConfig(sequences=1_000_000, batch_size=32)
 check("budget conversion: 1e6 sequences at batch 32 = 31,250 optimiser steps; steps= overrides", c.n_steps == 31250 and TrainConfig(steps=7).n_steps == 7)
+# loss weights: lq + 0.1 CE(S2) + 0.1 CE(l_S2) vs equal weights, on one batch
+_o = me(b7.ex, b7.labels); _t = M.loss_terms(_o, b7, True, M.EXTENDED_LOSS_WEIGHTS); _te = M.loss_terms(_o, b7, True, (1.0, 1.0, 1.0)); _tb = M.loss_terms(mb(b5.ex, b5.labels), b5, False, (5.0, 5.0, 5.0))
+CO_loss_check = abs(_t['loss'].item() - (_t['loss_q'] + 0.1 * _t['loss_s2'] + 0.1 * _t['loss_ls2']).item()) < 1e-5 and abs(_te['loss'].item() - (_te['loss_q'] + _te['loss_s2'] + _te['loss_ls2']).item()) < 1e-5 and abs(_tb['loss'].item() - _tb['loss_q'].item()) < 1e-9
+check("extended auxiliary losses default to weight 0.1 (documented deviation) and the weights change the objective only for the extended model", M.EXTENDED_LOSS_WEIGHTS == (1.0, 0.1, 0.1) and TrainConfig().loss_weights == (1.0, 0.1, 0.1) and CO_loss_check)
 check("defaults are the paper's: Adam lr 1e-5, batch 32, no early stopping option, one thread", c.lr == 1e-5 and c.batch_size == 32 and c.n_threads == 1 and not hasattr(c, "patience") and not hasattr(c, "weight_decay"))
 small = {k: v[:60] for k, v in D.build_eval_sets().items()}
 for variant in ("base", "extended"):

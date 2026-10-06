@@ -56,6 +56,15 @@ where, is recorded in results/PROVENANCE.md.
      fsl_test_class uses exemplar 0 only. Both are logged (test_exemplars, test_class_ex0).
    - The extended model's S2 is, in real data, uniform over the episode's two classes (docstring in src/data.py);
      its Bayes-optimal accuracy is 0.5, which is not a failure.
+   - EXTENDED LOSS WEIGHTS (a deviation from the plan, which says "equally weighted"): the two auxiliary losses (S2 and l_S2)
+     are weighted 0.1, the query-label loss 1 (src/metrics.py EXTENDED_LOSS_WEIGHTS). With equal weights the extended model
+     reaches 100% accuracy on its training sequences but does NOT form the paper's circuit: accuracy on held-out label pairs is
+     0.27-0.55 and induction strength about 0, at lr 1e-5 (up to 100,000 steps), 1e-4 and 3e-4. A controlled sweep at lr 1e-4
+     (seed 0, 15,000 steps) isolates the cause: the 50-way S2 loss (an in-weights task: name a training class) at weight 1.
+     Held-out-pair accuracy: weights (1,0,0) 1.00; (1,0,1) 1.00; (1,0.1,0.1) 1.00; (1,0.1,1) 1.00; (1,0.3,1) 0.99; (1,0.5,1) 0.69;
+     (1,1,0) 0.73; (1,1,1) 0.27-0.45. With (1,0.1,0.1) the extended model reaches the Bayes-optimal S2 accuracy (0.49-0.51 vs
+     0.5) and l_S2 >= 0.99 AND the paper's circuit at lr 1e-5, 3e-5 and 1e-4. The equal-weight runs are kept as evidence
+     (results/exact/tuning_table.md, block "extended_equal"). Logs: results/exact/logs/lw_*.csv.
    - The repository samples training batches online from the finite space; we draw 32 sequences uniformly with
      replacement from the enumerated pool each step (the same distribution).
    - Collapse pipeline decisions (src/collapse.py docstring has the full list): one pool size, N = 78,400, for every
