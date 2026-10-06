@@ -1,6 +1,6 @@
 """Summarise the 6 conditions x 3 seeds of results and draw the report figures.
 
-    python experiments/analyze_results.py
+    python experiments/analyze_results.py --pilot
 
 Reads results/ (written by the cluster jobs / run_all.py), writes
   results/analysis_summary.json     every number quoted in the report
@@ -32,7 +32,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+# The pilot analysis imports the PILOT task/metrics modules (data.py, metrics.py, ...), which now live in legacy_symbolic/.
+LEGACY = ROOT / "legacy_symbolic"
+sys.path.insert(0, str(LEGACY / "src"))
 
 FAIL_THRESHOLD = 0.5          # test accuracy below this = the generation's model failed to learn induction
 CLASSIC_HEAD = 0.5            # best-head induction score at/above this = a classic induction head
@@ -689,7 +691,7 @@ def tuning_summary(results: Path) -> dict:
     """Hyper-parameter study (experiments/tune_hparams.py), if its outputs are present."""
     if not (results / "tuning").is_dir() or not list((results / "tuning").glob("*.json")):
         return {}
-    sys.path.insert(0, str(ROOT / "experiments"))
+    sys.path.insert(0, str(LEGACY / "experiments"))
     from tune_hparams import summarize
     return summarize(results / "tuning")
 
@@ -1045,7 +1047,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default=str(ROOT / "results"))
     ap.add_argument("--figdir", default=str(ROOT / "abstract" / "figures"))
+    ap.add_argument("--pilot", action="store_true", help="analyse the symbolic pilot runs (the only mode so far)")
     args = ap.parse_args()
+    if not args.pilot:
+        raise SystemExit("The exact-task analysis is added in a later phase of the rebuild; "
+                         "run with --pilot to regenerate the symbolic-pilot numbers and figures.")
     results, figdir = Path(args.results), Path(args.figdir)
     figdir.mkdir(parents=True, exist_ok=True)
 

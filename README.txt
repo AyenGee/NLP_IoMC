@@ -1,3 +1,64 @@
+REBUILD: THE EXACT SINGH ET AL. (2024) TASK  (read this first)
+================================================================
+The first implementation of this project (tag v2-symbolic-pilot, frozen in legacy_symbolic/) used an
+ADAPTATION of the Singh et al. task: integer symbols, 4-way 3-shot, MLPs, learned positions, AdamW. It is now
+a PILOT. The main implementation (src/, configs/, experiments/, tests/) follows the paper exactly (Section 2.1,
+Appendices A and C) and the reference repository's settings; see "Deviations from the paper" below. The pilot's
+results stay where they were written (results/collapse, results/analysis, results/retrain, results/tuning,
+results/logs, results/checkpoints, cluster_run/); the sections of this file below the line "THE SYMBOLIC
+PILOT" describe that earlier work. Regenerate its numbers with
+    python experiments/analyze_results.py --pilot
+
+Progress: Phase 1 (data, model, training loop, tests) is implemented. The collapse pipeline, the interpretability
+tooling (ablations, ACDC) and the experiments are added phase by phase.
+
+1. Get the embeddings (data/, not in git)
+   The exemplars are the precomputed Omniglot ResNet18 features from the reference repository. No image and no ResNet
+   is touched. File: omniglot_resnet18_randomized_order_s0.h5 (16,638,016 bytes), dataset resnet18/224/feat,
+   shape (1623, 5, 512), float32.
+       mkdir -p data
+       curl -L -o data/omniglot_resnet18_randomized_order_s0.h5 \
+         https://github.com/aadityasingh/icl-dynamics/raw/main/omniglot_resnet18_randomized_order_s0.h5
+   (If the cluster blocks outbound downloads, copy the file there with scp.) data/*.h5 is git-ignored.
+
+2. Environment and tests
+       pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+       pip install -r requirements.txt            # includes h5py
+       python tests/test_exact.py                 # last line must be "==== FAILED: none ===="
+
+3. Phase 1 commands
+       python experiments/benchmark.py                         # steps/s on one core (sbatch slurm/benchmark.slurm on the cluster)
+       python experiments/train_run.py --variant base --steps 20000 --eval-every 250 --name smoke_base --out-dir results/exact/smoke
+       python experiments/plot_curves.py results/exact/smoke/logs/smoke_base.csv --out results/exact/smoke/smoke_base.png
+   Outputs land in results/exact/: logs/<name>.csv (one row per evaluation point), checkpoints/<name>.pt.
+
+4. What is implemented (Phase 1)
+   src/data.py     the exact task: 78,400 training sequences (156,800 extended) enumerated; four evaluation sets
+                   (train, val = held-out exemplars, test_exemplars = unseen classes, test_relabel = held-out label pairs)
+                   plus the repository's test_class_ex0; fixed seed; documented extended-sequence design.
+   src/model.py    attention-only, 2 layers, 8 heads of dim 8, RoPE, pre-LayerNorm, no MLP, no absolute positions;
+                   66,629 parameters (base) / 69,879 (extended); ablation and attention-override hooks; generation.
+   src/train.py    Adam, constant lr 1e-5, batch 32, no weight decay / warm-up / schedule / clipping / early stopping;
+                   step-based; logs loss, accuracy, perplexity on all sets and the induction / previous-token / match
+                   scores per head.
+   src/metrics.py  the paper's induction strength and the plan's other attention metrics, with documented thresholds.
+
+5. Deviations from the paper (kept up to date; every one is a decision, with its reason)
+   - PyTorch instead of JAX/Equinox. Initialisation mimics the repository's (lecun-normal-scale truncated normal
+     for linear layers, 0.02 x truncated normal for the label embedding); it cannot be bit-for-bit identical.
+   - The exact held-out label pairs cannot be reproduced: the repository draws them with a JAX PRNG (seed 20); we
+     shuffle the 10 pairs with NumPy and the same seed number. The split sizes (8 train, 2 held out) match.
+   - Budget units: the reference counts train_iters in SEQUENCES (its loop is range(0, train_iters, train_bs)); 1e6
+     iterations at batch 32 is 31,250 optimiser steps. src/train.py accepts either unit and logs both.
+   - Evaluation: the plan's test_exemplars draws exemplars from 0-4 of the test classes; the repository's
+     fsl_test_class uses exemplar 0 only. Both are logged (test_exemplars, test_class_ex0).
+   - The extended model's S2 is, in real data, uniform over the episode's two classes (docstring in src/data.py);
+     its Bayes-optimal accuracy is 0.5, which is not a failure.
+   - The repository samples training batches online from the finite space; we draw 32 sequences uniformly with
+     replacement from the enumerated pool each step (the same distribution).
+
+THE SYMBOLIC PILOT (earlier work, kept for reference)
+=====================================================
 MODEL COLLAPSE AND IN-CONTEXT LEARNING: DOES RECURSIVE TRAINING DEGRADE
 INDUCTION HEADS?
 ========================================================================

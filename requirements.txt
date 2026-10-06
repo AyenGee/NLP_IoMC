@@ -2,6 +2,8 @@
 torch==2.13.0
 numpy==2.5.2
 PyYAML==6.0.3
+# Reads the precomputed Omniglot ResNet18 features (data/omniglot_resnet18_randomized_order_s0.h5)
+h5py==3.16.0
 
 # Metrics / analysis
 scikit-learn==1.9.0
