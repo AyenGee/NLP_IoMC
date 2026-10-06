@@ -46,7 +46,7 @@ check("extended space = every base episode with each of the two S2 choices", int
 
 # ------------------------------------------------------------------ evaluation sets: the train / validation / test split
 ev = D.build_eval_sets()
-check("five evaluation sets of 1,000 sequences each", set(ev) == set(D.EVAL_SET_NAMES) and all(v.shape == (1000, 10) for v in ev.values()))
+check("five evaluation sets of 1,000 sequences each", set(ev) == set(D.EVAL_SET_NAMES) and all(v.shape == (1000, D.N_COLS) for v in ev.values()))
 check("evaluation sets are deterministic (rebuilt identically from the fixed seed)", all(np.array_equal(ev[k], D.build_eval_sets()[k]) for k in ev))
 p = TMP / "ev.npz"; D.save_eval_sets(p, ev); back = D.load_or_build_eval_sets(p)
 check("evaluation sets round-trip through the file on disk", all(np.array_equal(ev[k], back[k]) for k in ev))
@@ -174,6 +174,125 @@ check("training moves the parameters (the optimiser is doing something)", float(
 r1 = train_model(TrainConfig(variant="base", steps=12, eval_every=12, log_path=str(TMP / "d1.csv"), verbose=False), features=feats, evals=EvalSets(feats, False, small))
 r2 = train_model(TrainConfig(variant="base", steps=12, eval_every=12, log_path=str(TMP / "d2.csv"), verbose=False), features=feats, evals=EvalSets(feats, False, small))
 check("training is deterministic given the seed", all(torch.equal(p, q) for p, q in zip(r1["model"].parameters(), r2["model"].parameters())))
+
+# ------------------------------------------------------------------ ablations and phase landmarks (Phase 2)
+import circuits as CI
+ev_small = EvalSets(feats, False, small)
+prof = CI.ablation_profile(mb, ev_small)
+need = ["train_eval/baseline", "train_eval/zero_L2H0", "train_eval/keep_only_L2H7", "train_eval/zero_L1H3", "train_eval/zero_all_L1", "train_eval/zero_all_L2", "train_eval/cut_L1_direct", "test_relabel/zero_L2H2", "val/baseline"]
+check("ablation profile reports every intervention on every evaluation set", all(k in prof for k in need) and sum(k.startswith("test_exemplars/") for k in prof) == 1 + 8 * 3 + 3)
+bb = ev_small.batches["train_eval"]
+check("keep_only_Lh equals zeroing the other seven layer-2 heads", abs(prof["train_eval/keep_only_L2H3"] - CI._acc(mb, bb, {1: set(range(8)) - {3}})) < 1e-12)
+dd = mb(bb.ex[:, :3], bb.labels[:, :2], return_details=True, want_contrib=True)
+check("the final residual is the embedding plus both layers' head contributions (so 'cut layer 1 direct' subtracts exactly layer 1)", float((dd["resid"][0] + dd["head_contrib"][0].sum(1) + dd["head_contrib"][1].sum(1) - dd["resid"][-1]).abs().max()) < 1e-5)
+logits_cut = mb.label_head(mb.ln_f(dd["resid"][-1] - dd["head_contrib"][0].sum(1))[:, 4])
+check("cut_L1_direct matches an independent recomputation of the output without layer 1's direct write", abs(prof["train_eval/cut_L1_direct"] - (logits_cut.argmax(-1) == bb.query_label).float().mean().item()) < 1e-12)
+ad = CI.additivity(mb, ev_small, {0: 0.9, 1: 0.5, 2: 0.0, 3: -0.1, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0})
+check("additivity picks the heads above the strength threshold, strongest first", ad["heads"] == [0, 1] and ad["n_induction_heads"] == 2)
+rows_ph = [{"step": s_, "train_eval/loss": l_, "val/acc": a_, "train_eval/acc": a_} for s_, l_, a_ in [(1, 1.6, 0.2), (2, 0.69, 0.5), (3, 0.5, 0.7), (4, 0.1, 0.95)]]
+lm = M.phase_landmarks(rows_ph)
+check("phase landmarks: plateau exit below ln2-0.1, accuracy above 0.9", lm["plateau_exit_step"] == 3 and lm["val_acc_gt_0.9_step"] == 4 and M.phase_landmarks(rows_ph[:2])["val_acc_gt_0.9_step"] is None)
+
+# ------------------------------------------------------------------ ACDC on the attention-only graph
+import acdc as AC
+torch.manual_seed(5)
+ra = IHTransformer(ModelConfig())
+for q_ in ra.parameters():                      # larger weights so the invariants are not satisfied by a near-zero model
+    torch.nn.init.normal_(q_, 0, 0.3) if q_.dim() > 1 else torch.nn.init.normal_(q_, 0, 0.1)
+ba_ = D.collate(torch.as_tensor(base[:64]), feats, False); bb_ = D.collate(torch.as_tensor(base[5000:5064]), feats, False)
+exa, laa, exb, lab_ = ba_.ex[:, :3], ba_.labels[:, :2], bb_.ex[:, :3], bb_.labels[:, :2]
+check("ACDC graph for 2 layers x 8 heads has 257 edges (24 + 216 + 17)", len(AC.all_edges(2, 8)) == 257, str(len(AC.all_edges(2, 8))))
+lg, _ = AC.run_graph(ra, exa, laa)
+check("ACDC graph with every edge kept reproduces the model's own forward pass", float((lg - ra(exa, laa)["label_logits_q"]).abs().max()) < 1e-4)
+_, cor_ = AC.run_graph(ra, exb, lab_)
+cut_, _ = AC.run_graph(ra, exa, laa, {e: False for e in AC.all_edges(2, 8)}, cor_)
+check("ACDC graph with every edge cut reproduces the model on the corrupted input", float((cut_ - ra(exb, lab_)["label_logits_q"]).abs().max()) < 1e-4)
+keep_all = AC.acdc(ra, exa, laa, ba_.query_label, exb, lab_, tau=-1.0)
+cut_all = AC.acdc(ra, exa, laa, ba_.query_label, exb, lab_, tau=1e9)
+mid_ = AC.acdc(ra, exa, laa, ba_.query_label, exb, lab_, tau=0.05)
+check("ACDC: a negative threshold keeps every edge (circuit == model); a huge one leaves an empty circuit", keep_all.kl < 1e-9 and all(keep_all.kept.values()) and not any(cut_all.kept.values()) and cut_all.n_live_edges == 0)
+check("ACDC circuit size shrinks as the threshold grows and live edges are kept edges", cut_all.n_live_edges <= mid_.n_live_edges <= keep_all.n_live_edges and set(mid_.live_edges) <= {e for e, v in mid_.kept.items() if v})
+rl_ = AC.relabel_corruption(laa, 5, seed=2)
+check("relabel_corruption redraws two DISTINCT labels per sequence from the 5", rl_.shape == laa.shape and bool((rl_[:, 0] != rl_[:, 1]).all()) and int(rl_.max()) < 5)
+d_ = AC.describe(mid_)
+check("describe() reports size, live heads and the layer-1 -> layer-2 composition edges", all(k in d_ for k in ["n_edges", "heads_L1", "heads_L2", "kcomp", "qcomp", "vcomp", "edges"]))
+
+# ------------------------------------------------------------------ collapse pipeline
+import collapse as CO
+rs_ext = D.enumerate_train_space(True)
+check("real rows carry -1 in the three synthetic-target columns and 13 columns in all", base.shape[1] == D.N_COLS == 13 and bool((base[:, 10:] == -1).all()))
+st_real = CO.pool_stats(rs_ext, "extended")
+check("real extended pool: P(S2 = Q's class) = 0.5, S2 always in context, uniform S2 histogram (entropy ln 50, tail mass 0.2), labels all correct",
+      abs(st_real["p_s2_equals_q_class"] - 0.5) < 1e-9 and st_real["p_s2_outside_context"] == 0.0 and abs(st_real["s2_entropy"] - math.log(50)) < 1e-9 and abs(st_real["s2_tail_mass_k10"] - 0.2) < 1e-9 and st_real["lq_correct_all"] == 1.0 and st_real["ls2_correct_given_in_context"] == 1.0, str({k: round(v, 4) for k, v in st_real.items()}))
+check("noise floor of the S2 histogram KL between two independent real pools is small but positive", 0 < CO.noise_floor(rs_ext) < 0.01, f"{CO.noise_floor(rs_ext):.2e}")
+# synthetic rows: targets come from the override columns
+srows = base[:6].copy(); srows[:, D.LQ_SYN] = (D.true_query_label(torch.as_tensor(srows)).numpy() + 1) % 5
+bs = D.collate(torch.as_tensor(srows), feats, False)
+check("a synthetic query label replaces the in-context label as the training target", bool((bs.query_label != D.true_query_label(torch.as_tensor(srows))).all()))
+erows = D.enumerate_train_space(False)[:6].copy(); erows[:, D.LQ_SYN] = 2; erows[:, D.S2C_SYN] = [3, 7, 11, 13, 17, 49]; erows[:, D.LS2_SYN] = 4
+be_ = D.collate(torch.as_tensor(erows), feats, True)
+check("synthetic extended rows: S2 is exemplar 0 of the sampled class; lq is fed back as the third label; l_S2 and S2 targets are the sampled ones",
+      bool((be_.ex[:, 3] == feats[torch.as_tensor(erows[:, D.S2C_SYN]), 0]).all()) and bool((be_.labels[:, 2] == 2).all()) and bool((be_.s2_label == 4).all()) and be_.s2_class.tolist() == [3, 7, 11, 13, 17, 49])
+# mixing
+pm = CO.mix_pool(rs_ext, D.enumerate_train_space(False), 0.0, 1000, seed=1)
+check("mix_pool at p = 0: only real rows, drawn without replacement (all distinct)", len(pm) == 1000 and int((pm[:, D.LQ_SYN] >= 0).sum()) == 0 and len({tuple(r) for r in pm.tolist()}) == 1000)
+syn_fake = D.enumerate_train_space(False).copy(); syn_fake[:, D.LQ_SYN] = 0
+pm2 = CO.mix_pool(rs_ext, syn_fake, 0.25, 1000, seed=1)
+check("mix_pool at p = 0.25 gives exactly 250 synthetic and 750 real rows", int((pm2[:, D.LQ_SYN] >= 0).sum()) == 250 and int((pm2[:, D.LQ_SYN] < 0).sum()) == 750)
+try:
+    CO.mix_pool(rs_ext, syn_fake, 1.0, 100_000, seed=1); check("mix_pool refuses to draw more rows than the source has (no replacement)", False)
+except ValueError:
+    check("mix_pool refuses to draw more rows than the source has (no replacement)", True)
+# generated pools
+gen_ = torch.Generator().manual_seed(9)
+ctx = D.enumerate_train_space(False)[::50]
+sb = CO.synthetic_pool(mb, ctx, feats, "base", 1.0, False, gen_)
+check("base synthetic pool: every context once (no duplicate contexts), a sampled label in every row, contexts unchanged", len({tuple(r[:8]) for r in sb.tolist()}) == len(ctx) and bool((sb[:, D.LQ_SYN] >= 0).all()) and bool((sb[:, D.LQ_SYN] < 5).all()) and np.array_equal(sb[:, :8], ctx[:, :8]))
+se = CO.synthetic_pool(me, ctx, feats, "extended", 1.0, False, gen_)
+check("extended synthetic pool: lq, S2 class and l_S2 sampled for every context", bool((se[:, D.LQ_SYN] >= 0).all()) and bool((se[:, D.S2C_SYN] >= 0).all()) and bool((se[:, D.S2C_SYN] < 50).all()) and bool((se[:, D.LS2_SYN] >= 0).all()))
+st_syn = CO.pool_stats(se, "extended", np.bincount(D.s2_class(torch.as_tensor(rs_ext)).numpy(), minlength=50).astype(float))
+check("pool statistics for a synthetic extended pool are reported (S2 outside context, KL to generation 0, tail mass)", all(k in st_syn for k in ["p_s2_outside_context", "s2_kl_vs_gen0", "s2_tail_mass_k10", "lq_correct_synthetic"]) and st_syn["frac_synthetic"] == 1.0)
+g1 = CO.synthetic_pool(mb, ctx, feats, "base", 1.0, True, torch.Generator().manual_seed(1)); g2 = CO.synthetic_pool(mb, ctx, feats, "base", 1.0, True, torch.Generator().manual_seed(2))
+check("greedy sampling is deterministic and ignores the random generator", np.array_equal(g1, g2))
+# end to end: two generations, both variants
+for variant in ("base", "extended"):
+    cfg_c = CO.CollapseConfig(variant=variant, p_synthetic=0.5, n_generations=2, seed=3, steps=15, eval_every=15, out_dir=str(TMP / f"collapse_{variant}"))
+    CO.run_collapse(cfg_c, features=feats, verbose=False)
+    od = TMP / f"collapse_{variant}"
+    gens_ = list(csv.DictReader(open(od / "generations.csv")))
+    check(f"collapse {variant}: 2 generations run end to end and write generations.csv, per-generation logs, models and pools",
+          len(gens_) == 2 and all((od / f"gen{g}_{k}").exists() for g in (0, 1) for k in ("train.csv", "model.pt", "pool.npz")) and "val/acc" in gens_[0] and "pool_lq_correct_all" in gens_[0])
+    p0, p1 = np.load(od / "gen0_pool.npz")["pool"], np.load(od / "gen1_pool.npz")["pool"]
+    check(f"collapse {variant}: generation 0 trains on the whole real space, generation 1 on a 78,400-row pool of which half is synthetic",
+          len(p0) == (156800 if variant == "extended" else 78400) and len(p1) == 78400 and abs(float((p1[:, D.LQ_SYN] >= 0).mean()) - 0.5) < 1e-6)
+    ck0 = torch.load(od / "gen0_model.pt", weights_only=False); ck1 = torch.load(od / "gen1_model.pt", weights_only=False)
+    check(f"collapse {variant}: the same initialisation seed in every generation, a different batch-order seed", ck0["train_cfg"]["seed"] == ck1["train_cfg"]["seed"] == 3 and ck0["train_cfg"]["data_seed"] != ck1["train_cfg"]["data_seed"])
+    check(f"collapse {variant}: validation and test sets are the real ones in every generation (identical evaluation sets, so a model's logged accuracy is on real data)", all(f"{s}/acc" in gens_[1] for s in D.EVAL_SET_NAMES))
+
+# ------------------------------------------------------------------ Tier 1 analysis on a small results tree
+sys.path.insert(0, str(ROOT / "experiments"))
+import analyze_collapse as ACL, analyze_collapse_circuits as ACC
+tree = TMP / "tree"; (tree / "collapse").mkdir(parents=True)
+for cond, src in [("exact_extended_p05", "collapse_extended"), ("exact_extended_p0", "collapse_extended"), ("exact_base_p1", "collapse_base"), ("exact_base_p0", "collapse_base")]:
+    for sd in (0, 1):
+        shutil.copytree(TMP / src, tree / "collapse" / f"{cond}_s{sd}")
+ev_x = EvalSets(feats, True, small)
+rws, acr = ACC.analyze_run(tree, "exact_extended_p05_s0", ev_x, feats, taus=[0.01], n_acdc=16)
+write_ = ACC.write_csv; write_(rws, tree / "analysis" / "circuits_exact_extended_p05_s0.csv"); write_(acr, tree / "analysis" / "acdc_exact_extended_p05_s0.csv")
+check("per-generation circuit analysis writes one row per generation with ablation, additivity and embedding-geometry columns",
+      len(rws) == 2 and all(k in rws[0] for k in ["zero_L2H0_drop", "keep_only_L2H7_acc", "zero_L1H3_drop", "cut_L1_direct_acc", "n_induction_heads", "sum_single_drops", "joint_drop", "emb_cos_train", "emb_cos_test", "emb_effective_rank", "label_cos_gen0", "label_mean_pair_cos"]))
+check("generation 0 is identical to itself in embedding space (cosine 1) and the effective rank is between 1 and 50", abs(rws[0]["emb_cos_train"] - 1) < 1e-5 and 1 <= rws[0]["emb_effective_rank"] <= 50)
+check("ACDC rows: one per generation x corruption x tau with circuit size and composition columns", len(acr) == 2 * 2 * 1 and {r["corruption"] for r in acr} == {"resample", "labels"} and all(k in acr[0] for k in ["n_edges", "kl", "acc", "heads_L2", "kcomp"]))
+sm_ = ACL.collapse_summary(tree)
+check("collapse summary covers all four conditions with per-seed accuracy by generation, failure counts with intervals and the match-vs-copy tally",
+      set(sm_["conditions"]) == {"exact_extended_p05", "exact_extended_p0", "exact_base_p1", "exact_base_p0"} and all(k in sm_["conditions"]["exact_base_p1"] for k in ["acc_by_seed", "degraded_trainings", "failed_ci95", "match_before_copy", "copy_before_match", "same_generation", "neither_drops"]))
+check("contrasts with the real-data control are computed (exact permutation test over the seeds)", set(sm_["contrasts_vs_control"]) == {"exact_base_p1", "exact_extended_p05"} and sm_["contrasts_vs_control"]["exact_base_p1"]["final_copy_acc"]["permutation_p"] is not None)
+check("extended summaries include the S2 distribution-drift statistics and the noise floor", "pool_s2_kl_vs_gen0_median_by_gen" in sm_["conditions"]["exact_extended_p05"] and "s2_noise_floor_kl" in sm_["conditions"]["exact_extended_p05"])
+check("head-redundancy statistics appear once the circuit analysis exists", "n_induction_heads_median_by_gen" in sm_["conditions"]["exact_extended_p05"])
+ACL.make_figures(tree)
+check("the Tier 1 figures are written (accuracy, head scores, match vs copy, S2 drift, ACDC, ablation heatmaps, embeddings)", all((tree / "figures" / f).exists() for f in ["fig_accuracy_by_generation.png", "fig_head_scores.png", "fig_match_vs_copy.png", "fig_s2_drift.png", "fig_ablation_heatmaps.png", "fig_acdc.png", "fig_embeddings.png"]), str(sorted(p.name for p in (tree / "figures").glob("*"))))
+check("permutation test: identical groups give p = 1 and fully separated groups the minimum", ACL.perm_test([1, 2, 3, 4], [1, 2, 3, 4]) == 1.0 and abs(ACL.perm_test([1, 2, 3, 4], [10, 11, 12, 13]) - round(2 / 70, 4)) < 1e-9)
+check("Wilson interval for 0 of 10 is [0, ~0.28]", ACL.wilson(0, 10)[0] == 0.0 and abs(ACL.wilson(0, 10)[1] - 0.278) < 0.002)
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("\n==== FAILED:", FAILS if FAILS else "none ====")

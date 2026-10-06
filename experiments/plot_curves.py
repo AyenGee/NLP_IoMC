@@ -23,22 +23,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-# Okabe-Ito colour-blind-safe palette, one colour per evaluation set.
-SET_COLOR = {"train_eval": "#000000", "val": "#0072B2", "test_exemplars": "#D55E00", "test_relabel": "#009E73", "test_class_ex0": "#CC79A7"}
-SET_LABEL = {"train_eval": "train", "val": "val (held-out exemplars)", "test_exemplars": "test classes (match)",
-             "test_relabel": "held-out label pairs (copy)", "test_class_ex0": "test classes, exemplar 0"}
-HEAD_COLORS = ["#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from plot_style import HEAD_COLORS, SET_COLOR, SET_LABEL, style  # noqa: E402
 
 
 def read(path) -> dict[str, np.ndarray]:
     rows = list(csv.DictReader(open(path)))
     return {k: np.array([float(r[k]) if r[k] not in ("", "nan") else np.nan for r in rows]) for k in rows[0]}
-
-
-def style():
-    plt.rcParams.update({"font.size": 7, "axes.titlesize": 7.5, "axes.labelsize": 7, "legend.fontsize": 5.5, "xtick.labelsize": 6.5,
-                         "ytick.labelsize": 6.5, "axes.spines.top": False, "axes.spines.right": False, "axes.grid": True,
-                         "grid.alpha": 0.25, "grid.linewidth": 0.4})
 
 
 def plot_run(csv_path, out_png, title: str = ""):

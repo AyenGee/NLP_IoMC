@@ -1048,10 +1048,14 @@ def main():
     ap.add_argument("--results", default=str(ROOT / "results"))
     ap.add_argument("--figdir", default=str(ROOT / "abstract" / "figures"))
     ap.add_argument("--pilot", action="store_true", help="analyse the symbolic pilot runs (the only mode so far)")
-    args = ap.parse_args()
+    args, rest = ap.parse_known_args()
     if not args.pilot:
-        raise SystemExit("The exact-task analysis is added in a later phase of the rebuild; "
-                         "run with --pilot to regenerate the symbolic-pilot numbers and figures.")
+        # Default: the exact-task analysis (experiments/analyze_exact.py); remaining flags are passed on to it.
+        sys.path.insert(0, str(ROOT / "experiments"))
+        import analyze_exact
+        sys.argv = [sys.argv[0]] + rest
+        analyze_exact.main()
+        return
     results, figdir = Path(args.results), Path(args.figdir)
     figdir.mkdir(parents=True, exist_ok=True)
 

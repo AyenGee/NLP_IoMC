@@ -107,3 +107,15 @@ def head_summary(m: dict, n_heads: int, n_layers: int = 2) -> dict:
     return {"ind_max": max(ind), "ind_mean": sum(ind) / len(ind),
             "match_max": max(m[f"match_L{n_layers}H{h}"] for h in range(n_heads)),
             "prev_max": max(m[f"prev_L1H{h}"] for h in range(n_heads))}
+
+
+def phase_landmarks(rows: list[dict]) -> dict:
+    """Landmarks of the phase change from a run's logged rows (dicts with float values): the step at which the loss on
+    ``train_eval`` first drops below PLATEAU_EXIT_LOSS (= ln 2 - 0.1), the first step at which ``val`` accuracy exceeds
+    PHASE_ACC (0.9), and the same for ``train_eval`` accuracy. None where it never happens."""
+    def first(pred):
+        return next((int(r["step"]) for r in rows if pred(r)), None)
+
+    return {"plateau_exit_step": first(lambda r: r["train_eval/loss"] < PLATEAU_EXIT_LOSS),
+            "val_acc_gt_0.9_step": first(lambda r: r["val/acc"] > PHASE_ACC),
+            "train_acc_gt_0.9_step": first(lambda r: r["train_eval/acc"] > PHASE_ACC)}

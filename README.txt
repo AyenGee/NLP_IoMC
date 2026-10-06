@@ -9,8 +9,10 @@ results/logs, results/checkpoints, cluster_run/); the sections of this file belo
 PILOT" describe that earlier work. Regenerate its numbers with
     python experiments/analyze_results.py --pilot
 
-Progress: Phase 1 (data, model, training loop, tests) is implemented. The collapse pipeline, the interpretability
-tooling (ablations, ACDC) and the experiments are added phase by phase.
+Progress: implemented and tested (tests/test_exact.py): the exact task, the model, the training loop (Phase 1), the
+generation-0 replication with head ablations and ACDC (Phase 2), the learning-rate tuning analysis (Phase 3) and the
+collapse pipeline with its configs, Slurm scripts and per-generation analysis (Phase 4). Which runs have been done, and
+where, is recorded in results/PROVENANCE.md.
 
 1. Get the embeddings (data/, not in git)
    The exemplars are the precomputed Omniglot ResNet18 features from the reference repository. No image and no ResNet
@@ -56,6 +58,16 @@ tooling (ablations, ACDC) and the experiments are added phase by phase.
      its Bayes-optimal accuracy is 0.5, which is not a failure.
    - The repository samples training batches online from the finite space; we draw 32 sequences uniformly with
      replacement from the enumerated pool each step (the same distribution).
+   - Collapse pipeline decisions (src/collapse.py docstring has the full list): one pool size, N = 78,400, for every
+     generation >= 1 of both variants (generation 0 uses the whole real space: 78,400 base / 156,800 extended); the
+     synthetic share is drawn without replacement from the previous model's pool (every real context once), the real share
+     without replacement from the real space; the same initialisation in every generation of a run but a different
+     batch-order seed per generation. For the base variant the real space is exactly N, so the p = 0 control retrains on the
+     whole real space each generation (the finite space leaves no fresh data); for the extended variant it draws a fresh
+     78,400-sequence real pool each time.
+   - Synthetic targets are stored in three extra integer columns of each row (lq, s2c, ls2; -1 = real data).
+   - Hardware note: runs on this repository's development machine took about 70-120 steps/s per single-threaded run
+     depending on how many ran at once (src/train.py); see experiments/benchmark.py and slurm/benchmark.slurm for the cluster.
 
 THE SYMBOLIC PILOT (earlier work, kept for reference)
 =====================================================

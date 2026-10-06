@@ -36,7 +36,8 @@ class TrainConfig:
     batch_size: int = 32
     lr: float = 1e-5
     eval_every: int = 250                   # steps between evaluations (the paper: every 5,000 sequences ~ 156 steps)
-    seed: int = 0                           # model initialisation AND the order of training batches
+    seed: int = 0                           # model initialisation (and, by default, the order of training batches)
+    data_seed: int | None = None            # if given, the order of training batches uses this instead of seed + 1
     n_threads: int = 1
     log_path: str = "results/exact/logs/run.csv"
     ckpt_path: str | None = None
@@ -110,7 +111,7 @@ def train_model(cfg: TrainConfig, features: torch.Tensor | None = None, pool: np
     if init_state is not None:
         model.load_state_dict(init_state)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr, betas=(0.9, 0.999))
-    sampler = D.TrainSampler(pool, features, cfg.extended, seed=cfg.seed + 1)
+    sampler = D.TrainSampler(pool, features, cfg.extended, seed=cfg.data_seed if cfg.data_seed is not None else cfg.seed + 1)
     logger = CSVLogger(cfg.log_path)
     ckpt_steps = set(cfg.ckpt_steps)
 

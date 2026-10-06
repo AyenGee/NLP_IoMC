@@ -85,9 +85,13 @@ N_TRAIN_PAIRS = 8
 EVAL_SEED = 12345
 N_EVAL = 1000
 
-# Integer row layout of a sequence ("episode"). Base uses the first 8 columns; extended all 10.
-COLS = ("cA", "cB", "la", "lb", "q_is_A", "exA", "exB", "exQ", "s2_is_A", "exS2")
-C_A, C_B, L_A, L_B, Q_IS_A, EX_A, EX_B, EX_Q, S2_IS_A, EX_S2 = range(10)
+# Integer row layout of a sequence ("episode"). Base uses the first 8 columns; extended the first 10. The last three
+# columns hold SYNTHETIC targets sampled by a model (collapse pipeline) and are -1 for real data, where the targets are
+# derived from the episode: lq (the label the model sampled for Q), s2c (the class it sampled for S2, fed back as exemplar
+# EX_S2 of that class) and ls2 (the label it sampled for S2).
+COLS = ("cA", "cB", "la", "lb", "q_is_A", "exA", "exB", "exQ", "s2_is_A", "exS2", "lq", "s2c", "ls2")
+C_A, C_B, L_A, L_B, Q_IS_A, EX_A, EX_B, EX_Q, S2_IS_A, EX_S2, LQ_SYN, S2C_SYN, LS2_SYN = range(13)
+N_COLS = 13
 
 EVAL_SET_NAMES = ("train_eval", "val", "test_exemplars", "test_relabel", "test_class_ex0")
 
@@ -137,7 +141,7 @@ def enumerate_train_space(extended: bool = False) -> np.ndarray:
             for pair in train_pairs:
                 for la, lb in ((pair[0], pair[1]), (pair[1], pair[0])):
                     for q_is_A in (1, 0):
-                        rows.append((cA, cB, la, lb, q_is_A, 0, 0, 0, 0, 0))
+                        rows.append((cA, cB, la, lb, q_is_A, 0, 0, 0, 0, 0, -1, -1, -1))
     rows = np.array(rows, dtype=np.int64)
     if extended:
         rows = np.concatenate([rows, rows], axis=0)
@@ -156,7 +160,7 @@ def _sample_rows(rng: np.random.Generator, n: int, classes: np.ndarray, exemplar
     swap = rng.integers(0, 2, size=n).astype(bool)
     la = np.where(swap, pair[:, 1], pair[:, 0])
     lb = np.where(swap, pair[:, 0], pair[:, 1])
-    rows = np.zeros((n, 10), dtype=np.int64)
+    rows = np.full((n, N_COLS), -1, dtype=np.int64)
     rows[:, C_A], rows[:, C_B], rows[:, L_A], rows[:, L_B] = cA, cB, la, lb
     rows[:, Q_IS_A] = rng.integers(0, 2, size=n)
     rows[:, S2_IS_A] = rng.integers(0, 2, size=n)
@@ -199,16 +203,30 @@ def query_class(rows: torch.Tensor) -> torch.Tensor:
     return torch.where(rows[:, Q_IS_A] == 1, rows[:, C_A], rows[:, C_B])
 
 
-def query_label(rows: torch.Tensor) -> torch.Tensor:
+def true_query_label(rows: torch.Tensor) -> torch.Tensor:
+    """The label the episode itself assigns to Q's class (the in-context label)."""
     return torch.where(rows[:, Q_IS_A] == 1, rows[:, L_A], rows[:, L_B])
 
 
+def query_label(rows: torch.Tensor) -> torch.Tensor:
+    """The training target for Q: the synthetic label if a model sampled one, else the true in-context label."""
+    return torch.where(rows[:, LQ_SYN] >= 0, rows[:, LQ_SYN], true_query_label(rows))
+
+
 def s2_class(rows: torch.Tensor) -> torch.Tensor:
-    return torch.where(rows[:, S2_IS_A] == 1, rows[:, C_A], rows[:, C_B])
+    real = torch.where(rows[:, S2_IS_A] == 1, rows[:, C_A], rows[:, C_B])
+    return torch.where(rows[:, S2C_SYN] >= 0, rows[:, S2C_SYN], real)
+
+
+def true_s2_label(rows: torch.Tensor) -> torch.Tensor:
+    """The in-context label of S2's class when S2 is one of the episode's two classes, else -1."""
+    c2 = s2_class(rows)
+    return torch.where(c2 == rows[:, C_A], rows[:, L_A], torch.where(c2 == rows[:, C_B], rows[:, L_B], torch.full_like(c2, -1)))
 
 
 def s2_label(rows: torch.Tensor) -> torch.Tensor:
-    return torch.where(rows[:, S2_IS_A] == 1, rows[:, L_A], rows[:, L_B])
+    """The training target for S2's label: the synthetic one if sampled, else the in-context label."""
+    return torch.where(rows[:, LS2_SYN] >= 0, rows[:, LS2_SYN], true_s2_label(rows))
 
 
 @dataclasses.dataclass
