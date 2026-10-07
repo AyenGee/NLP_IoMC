@@ -370,18 +370,25 @@ check("an unknown mode is rejected", _bad_mode)
 
 # the manifest: sizes, unique outputs, configs, scripts and time limits agree
 sizes = {g: len(j) for g, j in MF.GROUPS.items()}
-check("manifest group sizes: tier1 48, weakgen 50, continue20 32, temperature 30, accumulate 16, lr1e5 12, sweep 12",
-      sizes == {"tier1": 48, "weakgen": 50, "continue20": 32, "temperature": 30, "accumulate": 16, "lr1e5": 12, "sweep": 12}, str(sizes))
+check("manifest group sizes: tier1 48, weakgen 50, continue20 32, temperature 30, accumulate 16, lr1e5 12, sweep 12, sweep1e4 12",
+      sizes == {"tier1": 48, "weakgen": 50, "continue20": 32, "temperature": 30, "accumulate": 16, "lr1e5": 12, "sweep": 12, "sweep1e4": 12}, str(sizes))
 check("check_manifest.py: every Slurm script's array range and time limit match its group, configs exist, no output name clashes", CMF.main() == 0)
 check("the continuation jobs reuse the Tier 1 run names (they resume those chains) and ask for 20 generations", all(j.run_name in {x.run_name for x in MF.GROUPS["tier1"]} and dict(j.overrides) == {"n_generations": 20} for j in MF.GROUPS["continue20"]))
 r_ = RAT.resolve(MF.GROUPS["sweep"][4], Path("results/exact"), {})
-check("sweep job resolves to the extended model at lr 1e-4, 15,000 steps and loss weights (1, w, 1), seed in the name and the output path",
-      r_["kind"] == "train" and r_["kw"]["loss_weights"] == (1.0, 0.5, 1.0) and r_["kw"]["steps"] == 15000 and r_["kw"]["sequences"] is None and r_["kw"]["variant"] == "extended" and r_["kw"]["lr"] == 1e-4 and r_["name"] == "lw3_s2w0.5_s1" and r_["kw"]["ckpt_path"].endswith("lw3_s2w0.5_s1.pt"))
+check("sweep job resolves to the extended model at the main collapse setting (lr 3e-4, 5,000 steps) with loss weights (1, w, 1), seed in the name and the output path",
+      r_["kind"] == "train" and r_["kw"]["loss_weights"] == (1.0, 0.5, 1.0) and r_["kw"]["steps"] == 5000 and r_["kw"]["sequences"] is None and r_["kw"]["variant"] == "extended" and r_["kw"]["lr"] == 3e-4 and r_["name"] == "lw3_s2w0.5_s1" and r_["kw"]["ckpt_path"].endswith("lw3_s2w0.5_s1.pt"))
+import yaml as _yaml
+_t1 = _yaml.safe_load(open(ROOT / "configs" / "exact_extended_p1.yaml", encoding="utf-8"))["collapse"]
+check("the sweep's lr and number of steps are the Tier 1 ones (read from configs/exact_extended_p1.yaml)", r_["kw"]["lr"] == _t1["lr"] and r_["kw"]["steps"] == _t1["sequences"] // 32 and r_["kw"]["eval_every"] == _t1["eval_every"])
+_s4 = RAT.resolve(MF.GROUPS["sweep1e4"][4], Path("results/exact"), {})
+check("the second-check sweep keeps the earlier setting (lr 1e-4, 15,000 steps) under different output names, over the same weights and seeds",
+      _s4["kw"]["lr"] == 1e-4 and _s4["kw"]["steps"] == 15000 and _s4["kw"]["loss_weights"] == (1.0, 0.5, 1.0) and _s4["name"] == "lw3b_lr1e-4_s2w0.5_s1"
+      and [j.seed for j in MF.GROUPS["sweep1e4"]] == [j.seed for j in MF.GROUPS["sweep"]] and {j.run_name for j in MF.GROUPS["sweep1e4"]}.isdisjoint({j.run_name for j in MF.GROUPS["sweep"]}))
 r_ = RAT.resolve(MF.GROUPS["continue20"][5], Path("results/exact"), RAT.parse_overrides(["n_generations=4", "steps=40"]))
 check("--override wins over the job's own overrides, a step override replaces the sequence budget, and the output directory is the Tier 1 one",
       r_["kw"]["n_generations"] == 4 and r_["kw"]["steps"] == 40 and r_["kw"]["sequences"] is None and r_["kw"]["out_dir"].replace("\\", "/").endswith("collapse/exact_base_p1_s5"))
 r_ = RAT.resolve(MF.GROUPS["weakgen"][0], Path("results/exact"), {})
-check("weak-generator job: 3 generations, generation 0 trained for 250 steps, fully synthetic", r_["kw"]["n_generations"] == 3 and r_["kw"]["gen0_steps"] == 250 and r_["kw"]["p_synthetic"] == 1.0)
+check("weak-generator job: generation 0 trained for 250 steps, then 10 further generations (11 in all), fully synthetic", r_["kw"]["n_generations"] == 11 and r_["kw"]["gen0_steps"] == 250 and r_["kw"]["p_synthetic"] == 1.0)
 _tj = [RAT.resolve(j, Path("results/exact"), {})["kw"] for j in MF.GROUPS["temperature"]]
 check("temperature jobs cover T = 0.5, 2 and greedy for both variants", {(k["variant"], k["temperature"], k["greedy"]) for k in _tj} == {(v, t, g) for v in ("base", "extended") for t, g in ((0.5, False), (2.0, False), (1.0, True))})
 _aj = [RAT.resolve(j, Path("results/exact"), {})["kw"] for j in MF.GROUPS["accumulate"]]

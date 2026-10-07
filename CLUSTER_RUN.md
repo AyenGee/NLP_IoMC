@@ -1,18 +1,19 @@
 # Running Tier 2 on the Wits mscluster (steps to do by hand)
 
 Everything below is what you type; nothing is submitted for you. `<repo>` is the repository directory on the cluster, `<user>@<host>` your login.
-Branch: `exact-singh-rebuild`. Tier 1 (48 chains) was run locally; Tier 2 is 152 jobs in six Slurm array jobs, submitted in the priority order of the Gate 4 decision.
+Branch: `exact-singh-rebuild`. Tier 1 (48 chains) was run locally; Tier 2 is 164 jobs in seven Slurm array jobs, submitted in the priority order of the Gate 4 decision.
 
 | order | group | what | tasks | time limit per task | local single-task time | about CPU-hours |
 |---|---|---|---|---|---|---|
-| a | `weakgen` | weak generator: generation 0 trained 250/500/750/1000/1500 steps, then 2 generations; base and extended, 5 seeds | 50 | 00:15 | 7 min | 4.5 |
+| a | `weakgen` | weak generator: generation 0 trained 250/500/750/1000/1500 steps, then 10 further generations (p=1, Tier 1 settings; 11 in all); base and extended, 5 seeds | 50 | 00:50 | 31 min | 21 |
 | b | `continue20` | Tier 1 chains base p=1, base p=0, extended p=1, extended p=0 (8 seeds) from generation 10 to 20 | 32 | 00:50 | 33 min | 12.6 |
 | c | `temperature` | T = 0.5, 2, greedy; fully synthetic; base and extended; 5 seeds | 30 | 00:45 | 29 min | 11.8 |
 | d | `accumulate` | accumulate vs replace; fully synthetic; base and extended; 8 seeds | 16 | 00:45 | 30 min | 6.3 |
 | e | `lr1e5` | the paper's lr 1e-5 and 31,250 steps/generation; base p=1, p=0, extended p=1, p=0; 3 seeds; 10 generations | 12 | 02:40 | 106 min | 19.1 |
-| f | `sweep` | S2 loss weight in {1, 0.5, 0.3, 0.1} (l_S2 weight 1), lr 1e-4, 15,000 steps, 3 seeds | 12 | 00:10 | 6 min | 1.0 |
+| f | `sweep` | S2 loss weight in {1, 0.5, 0.3, 0.1} (l_S2 weight 1) at the main collapse setting: lr 3e-4, 5,000 steps, 3 seeds | 12 | 00:05 | 3 min | 0.6 |
+| g | `sweep1e4` | the same sweep at the earlier setting lr 1e-4, 15,000 steps, as a second check | 12 | 00:10 | 6 min | 1.2 |
 
-Time limits are 1.5 x the measured local time (4 tasks at once, 1 thread each), rounded up to 5 minutes. About 55 CPU-hours in all; how long it
+Time limits are 1.5 x the measured local time (4 tasks at once, 1 thread each), rounded up to 5 minutes. About 72 CPU-hours in all; how long it
 takes depends on how many of your tasks the cluster runs at once (a `QOSMaxJobsPerUserLimit` pending reason is normal, the rest simply wait).
 Every chain is **resumable**: a task that times out or is pre-empted is resubmitted and continues from its last completed generation.
 
@@ -61,9 +62,9 @@ If the test or the smoke run fails, stop and send me the log; do not submit.
 ## 4. Submit everything
 
 ```bash
-bash slurm/submit_tier2.sh --dry-run                   # prints the six sbatch lines, checks the manifest and that the 32 generation-9 inputs are present
-bash slurm/submit_tier2.sh                             # submits a, b, c, d, e, f in that order
-cat slurm/logs/submitted_tier2_*.txt                   # the six job IDs: send them to me (I record them in results/PROVENANCE.md)
+bash slurm/submit_tier2.sh --dry-run                   # prints the seven sbatch lines, checks the manifest and that the 32 generation-9 inputs are present
+bash slurm/submit_tier2.sh                             # submits a, b, c, d, e, f, g in that order
+cat slurm/logs/submitted_tier2_*.txt                   # the seven job IDs: send them to me (I record them in results/PROVENANCE.md)
 ```
 
 To submit only some groups: `ONLY="weakgen temperature" bash slurm/submit_tier2.sh`.
@@ -104,9 +105,10 @@ new experiment.
 
 | group | output | the chain's generations.csv has |
 |---|---|---|
-| weakgen | `results/exact/collapse/exact_{variant}_weak{steps}_s{seed}/` | 3 rows; generation 0 is the weak generator (its `steps` column is the stage) |
+| weakgen | `results/exact/collapse/exact_{variant}_weak{steps}_s{seed}/` | 11 rows; generation 0 is the weak generator (its `steps` column is the stage), generations 1-10 are trained on samples |
 | continue20 | `results/exact/collapse/exact_{condition}_s{seed}/` (the Tier 1 directories) | 20 rows; `run_config.json` lists the resume |
 | temperature | `.../exact_{variant}_{T0p5,T2,Tgreedy}_s{seed}/` | 10 rows |
 | accumulate | `.../exact_{variant}_accum_s{seed}/` | 10 rows; `pool_pool_size` grows N, 2N, ... 10N; `pool_new_*` describe the newest synthetic pool; `gen<g>_pool.npz` is that pool |
 | lr1e5 | `.../exact_lr1e5_{condition}_s{seed}/` | 10 rows |
-| sweep | `results/exact/logs/lw3_s2w{w}_s{seed}.csv`, `results/exact/checkpoints/lw3_s2w{w}_s{seed}.pt` | (a training log, not a chain) |
+| sweep | `results/exact/logs/lw3_s2w{w}_s{seed}.csv`, `results/exact/checkpoints/lw3_s2w{w}_s{seed}.pt` (lr 3e-4, 5,000 steps) | (a training log, not a chain) |
+| sweep1e4 | `results/exact/logs/lw3b_lr1e-4_s2w{w}_s{seed}.csv` and `.pt` in `checkpoints/` (lr 1e-4, 15,000 steps) | (a training log, not a chain) |

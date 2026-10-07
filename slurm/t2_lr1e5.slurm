@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tier 2e: confirmation of the Tier 1 conclusions at the paper's lr 1e-5 and 1,000,000 sequences (31,250 steps) per generation:
+# Tier 2e: confirmation at the paper's lr 1e-5 and 1,000,000 sequences (31,250 steps) per generation:
 # base p=1, base p=0, extended p=1, extended p=0, 3 seeds, 10 generations. 12 tasks.
 # One array task = one job of experiments/manifest.py group "lr1e5", one CPU thread (the code sets torch.set_num_threads(1)).
 # Time limit 02:40:00 = 1.5 x the measured local time of the slowest task (106 min, 4 tasks at once on one thread each),

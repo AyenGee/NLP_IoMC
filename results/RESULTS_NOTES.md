@@ -21,9 +21,10 @@ Learning rate 3e-4 and 5,000 steps (160,000 sequences) per generation were chose
 2. **Budget unit.** The plan's "1,000,000 steps" is read as the reference code's 1,000,000 *sequences* (31,250 steps at batch 32). Checked
    against the paper's text (arXiv 2404.07129, PDF text layer): Appendix A gives "a batch size of 32 sequences" and a constant lr of 1e-5; Appendix B says a
    standard run takes about 7 minutes "for 1e6 sequences seen"; the training-curve figures for the clamped and data-dependent experiments (Figures 5, 6
-   and 12) are plotted against "# sequences seen". The axis label of Figure 3 itself is not in the PDF's text layer, so it is not independently checked here.
-   Our lr 1e-5 phase change at 11,000-13,500 steps is 3.5-4.3e5 sequences, inside the paper's 1e6-sequence run; whether it matches the timing in the
-   paper's Figure 3 was not compared (the figure's data are not in the text).
+   and 12) are plotted against "# sequences seen". The axis label of Figure 3 is not in the PDF's text layer; the author checked the figure image:
+   Figure 3b's x-axis is "# sequences seen x10^6", and the phase change there is at roughly 2-3 x 10^5 sequences. Our lr 1e-5 phase change at 11,000-13,500
+   steps is 3.5-4.3 x 10^5 sequences by the train-accuracy > 0.9 criterion, which lags the onset of the loss drop, so the two are of the same order of
+   magnitude (not compared more precisely: the figure's data are not available as text and the criteria differ).
 3. **Learning rate 3e-4, not the paper's 1e-5**, with a 5,000-step budget per generation (phase change at 750-1,000 steps).
    Same circuit as at 1e-5 in all 3 seeds (table). Collapse dynamics at the paper's lr were not run.
 4. **Held-out accuracy ceiling.** Accuracy on held-out exemplars (`val`, `test_exemplars`) is ~0.85-0.87 even at generation 0
@@ -128,8 +129,11 @@ runs at lr 1e-5; real sequences of the training classes, since the S2 head has o
   50-way output; the model only ever saw exemplar 0 of each class, so identifying the class from another drawing is a memorised lookup that does not
   transfer (the query-label induction circuit copies labels and does not need class identity). So the S2 target measures training-set memorisation, not
   in-context ability, and the drift of S2 under collapse is a statement about this memorised lookup.
-- At the paper's lr 1e-5 (31,250 steps, auxiliary weights 0.1) the S2 head is much less trained (0.39 outside the context even on training exemplars). The lr 1e-5
-  confirmation runs will therefore start the S2 drift from a very different generation-1 pool; this is a property of the weighted auxiliary loss at the small lr.
+- At the paper's lr 1e-5 (31,250 steps, auxiliary weights 0.1) the S2 head is much less trained: 0.39 of its mass is outside the context on training exemplars,
+  against 0.08 at lr 3e-4. **Consequence for the lr 1e-5 confirmation (Tier 2e): it tests query-label accuracy and the circuit only. Its S2-drift
+  numbers (P(S2 = Q's class), S2 outside the context, tail mass, KL to generation 0) are not comparable with the lr 3e-4 chains**, because generation 0
+  already starts from a far weaker S2 distribution (the generation-1 pool starts at 0.39 outside the context, not 0.08); they are reported for that run
+  but are not evidence for or against the Tier 1 S2-drift result.
 
 ## 4. What Tier 1 does and does not show
 

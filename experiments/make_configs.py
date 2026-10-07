@@ -7,7 +7,7 @@
 The learning rate and the budget are decided at the tuning gate (analyze_tuning.py); they are recorded in every config's
 header so that a later reader can see what was run and why. ``--tier2`` reads lr, budget, evaluation interval and loss weights
 from the committed configs/exact_base_p1.yaml / exact_extended_p1.yaml (so Tier 2 can never drift from Tier 1) and writes
-    exact_{base,extended}_weak{250,500,750,1000,1500}.yaml   weak generator (generation 0 trained for that many steps; 3 generations)
+    exact_{base,extended}_weak{250,500,750,1000,1500}.yaml   weak generator (generation 0 trained for that many steps, then 10 generations: 11 in all)
     exact_{base,extended}_{T0p5,T2,Tgreedy}.yaml             sampling temperature 0.5, 2, greedy (fully synthetic, 10 generations)
     exact_{base,extended}_accum.yaml                         accumulate instead of replace (fully synthetic, 10 generations)
     exact_lr1e5_{base_p1,base_p0,extended_p1,extended_p0}.yaml   the paper's lr 1e-5 and 1,000,000 sequences per generation
@@ -64,8 +64,8 @@ def tier2(out: Path) -> None:
 
     for v in ("base", "extended"):
         for s in WEAK_STEPS:
-            put(f"exact_{v}_weak{s}", v, 1.0, f"{v} model, weak-generator test: generation 0 trained for only {s} steps (phase change at about 750-1,750 steps), then 2 generations on its samples",
-                n_generations=3, gen0_steps=s)
+            put(f"exact_{v}_weak{s}", v, 1.0, f"{v} model, weak-generator test: generation 0 trained for only {s} steps (phase change at about 750-1,750 steps), then 10 further generations on its samples (p = 1, the Tier 1 settings)",
+                n_generations=11, gen0_steps=s)
         for tag, (t, greedy, what) in TEMPS.items():
             put(f"exact_{v}_{tag}", v, 1.0, f"{v} model, fully synthetic with {what}", temperature=t, greedy=greedy)
         put(f"exact_{v}_accum", v, 1.0, f"{v} model, accumulate: generation g trains on a fixed real pool plus the synthetic pools of generations 1..g (Gerstgrasser et al. 2024), instead of replacing", mode="accumulate")

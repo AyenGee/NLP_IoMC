@@ -1,8 +1,8 @@
 #!/bin/bash
-# Tier 2f: auxiliary-loss weight sweep on the extended model, loss weights (1, w, 1), w in {1, 0.5, 0.3, 0.1}, lr 1e-4,
-# 15,000 steps, 3 seeds. 12 single trainings.
+# Tier 2f: auxiliary-loss weight sweep on the extended model at the main collapse setting (lr 3e-4, 5,000 steps), loss weights
+# (1, w, 1), w in {1, 0.5, 0.3, 0.1}, 3 seeds. 12 single trainings.
 # One array task = one job of experiments/manifest.py group "sweep", one CPU thread (the code sets torch.set_num_threads(1)).
-# Time limit 00:10:00 = 1.5 x the measured local time of the slowest task (6 min, 4 tasks at once on one thread each),
+# Time limit 00:05:00 = 1.5 x the measured local time of the slowest task (3 min, 4 tasks at once on one thread each),
 # rounded up to 5 minutes; if the cluster is slower, submit with a larger --time (slurm/submit_tier2.sh TIME_SCALE=...).
 # Every chain is RESUMABLE: a task that timed out or was pre-empted is simply resubmitted (sbatch --array=<ids> slurm/t2_sweep.slurm)
 # and continues from its last completed generation.
@@ -14,7 +14,7 @@
 #SBATCH --array=0-11
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=3G
-#SBATCH --time=00:10:00
+#SBATCH --time=00:05:00
 #SBATCH --output=slurm/logs/%x_%A_%a.out
 #SBATCH --error=slurm/logs/%x_%A_%a.err
 

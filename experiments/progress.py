@@ -1,6 +1,6 @@
 """Progress of the experiment groups, from the files on disk (no Slurm needed), and the array ids still to run.
 
-    python experiments/progress.py                       # the six Tier 2 groups
+    python experiments/progress.py                       # the seven Tier 2 groups
     python experiments/progress.py --groups weakgen lr1e5 --verbose
     python experiments/progress.py --out-root results/exact
 
@@ -22,7 +22,7 @@ sys.path.insert(0, str(HERE.parent / "src"))
 from manifest import GROUPS  # noqa: E402
 from run_array_task import resolve  # noqa: E402
 
-TIER2 = ["weakgen", "continue20", "temperature", "accumulate", "lr1e5", "sweep"]
+TIER2 = ["weakgen", "continue20", "temperature", "accumulate", "lr1e5", "sweep", "sweep1e4"]
 
 
 def state(job, out_root: Path) -> tuple[int, int]:

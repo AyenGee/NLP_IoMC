@@ -7,12 +7,13 @@
 #   ONLY="weakgen temperature" bash slurm/submit_tier2.sh    # a subset, still in priority order
 #
 # Order (the Slurm queue is first-in first-out within a user's priority, so earlier lines start first):
-#   a  weakgen      weak generator (50 chains)
+#   a  weakgen      weak generator, 10 further generations after the weak generation 0 (50 chains of 11 generations)
 #   b  continue20   generation 10 -> 20 of base p=1, base p=0, extended p=1, extended p=0 (32 chains; needs the Tier 1 output dirs)
 #   c  temperature  T = 0.5, 2, greedy (30 chains)
 #   d  accumulate   accumulate vs replace (16 chains)
 #   e  lr1e5        confirmation at the paper's lr 1e-5 (12 chains, the longest)
-#   f  sweep        auxiliary-loss weight sweep (12 trainings)
+#   f  sweep        auxiliary-loss weight sweep at lr 3e-4, 5,000 steps (12 trainings)
+#   g  sweep1e4     the same sweep at lr 1e-4, 15,000 steps, a second check (12 trainings)
 # The job IDs are appended to slurm/logs/submitted_tier2_<timestamp>.txt: send them to the person recording provenance.
 # Everything is resumable: a task that times out or is pre-empted is resubmitted with
 #   sbatch --array=<task ids> --time=<longer> slurm/t2_<group>.slurm        (it continues from its last completed generation)
@@ -21,9 +22,9 @@ cd "$(dirname "$0")/.."
 
 DRY=0
 [ "${1:-}" = "--dry-run" ] && DRY=1
-ORDER=(weakgen continue20 temperature accumulate lr1e5 sweep)
+ORDER=(weakgen continue20 temperature accumulate lr1e5 sweep sweep1e4)
 declare -A SCRIPT=([weakgen]=t2_weakgen.slurm [continue20]=t2_continue20.slurm [temperature]=t2_temperature.slurm
-                   [accumulate]=t2_accumulate.slurm [lr1e5]=t2_lr1e5.slurm [sweep]=t2_sweep.slurm)
+                   [accumulate]=t2_accumulate.slurm [lr1e5]=t2_lr1e5.slurm [sweep]=t2_sweep.slurm [sweep1e4]=t2_sweep1e4.slurm)
 SCALE="${TIME_SCALE:-1}"
 SELECT=" ${ONLY:-${ORDER[*]}} "
 

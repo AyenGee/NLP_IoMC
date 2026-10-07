@@ -24,23 +24,24 @@ to every printed digit.
 
 ## Cluster (mscluster)
 
-Tier 1 was not run on the cluster (see "Tier 1 collapse" above). Tier 2 (Gate 4 decision of 7 Oct 2026) is submitted by the user with
+Tier 1 was not run on the cluster (see "Tier 1 collapse" above). Tier 2 (Gate 4 decision of 7 Oct 2026, amended the same day: weak generator for 10 further generations, sweep at lr 3e-4) is submitted by the user with
 `bash slurm/submit_tier2.sh` (CLUSTER_RUN.md); the job IDs are recorded here when given:
 
 | group | what | tasks | Slurm job ID | submitted | time limit | state |
 |---|---|---|---|---|---|---|
-| weakgen | weak generator | 50 | (not yet submitted) | | 00:15 | |
+| weakgen | weak generator, 10 further generations (11 in all) | 50 | (not yet submitted) | | 00:50 | |
 | continue20 | Tier 1 conditions to generation 20 | 32 | (not yet submitted) | | 00:50 | |
 | temperature | T = 0.5, 2, greedy | 30 | (not yet submitted) | | 00:45 | |
 | accumulate | accumulate vs replace | 16 | (not yet submitted) | | 00:45 | |
 | lr1e5 | paper's lr 1e-5 confirmation | 12 | (not yet submitted) | | 02:40 | |
-| sweep | S2-weight sweep, 3 seeds | 12 | (not yet submitted) | | 00:10 | |
+| sweep | S2-weight sweep, 3 seeds, lr 3e-4 / 5,000 steps | 12 | (not yet submitted) | | 00:05 | |
+| sweep1e4 | the same sweep at lr 1e-4 / 15,000 steps (second check) | 12 | (not yet submitted) | | 00:10 | |
 | smoke test | `slurm/smoke_tier2.sh` | 1 | (not yet run) | | 00:45 | |
 | unit tests on the cluster | `slurm/test_exact.slurm` | 1 | (not yet run) | | 00:30 | |
 
 Code state for Tier 2: branch `exact-singh-rebuild`, commit recorded in `slurm/logs/submitted_tier2_<timestamp>.txt` by `submit_tier2.sh`.
-Local checks done before handing over: `tests/test_exact.py` (127 checks, including resume equivalence and manifest/Slurm consistency);
-`slurm/smoke_tier2.sh` run locally; the replay of the sampling generator reproduces every saved pool of `exact_base_p1_s0` and
+Local checks done before handing over: `tests/test_exact.py` (129 checks, including resume equivalence and manifest/Slurm consistency);
+`slurm/smoke_tier2.sh` run locally (SMOKE OK, after the amendments too); the replay of the sampling generator reproduces every saved pool of `exact_base_p1_s0` and
 `exact_extended_p05_s1` (generations 1-9, 100% of rows), which is what makes the continuation to generation 20 exact.
 
 ## Generation-0 S2 head on real data (local, 7 Oct 2026)

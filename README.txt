@@ -84,8 +84,9 @@ where, is recorded in results/PROVENANCE.md.
        python experiments/analyze_collapse_circuits.py --group-id <0..5>        (per-generation ablations, ACDC, embeddings)
        python experiments/analyze_exact.py --collapse                           (summary JSON + figures)
        python experiments/analyze_gen0_s2.py                                    (the generation-0 S2 head on real data)
-   Tier 2 (152 jobs in six Slurm array jobs, priority order a-f): weak generator, continuing four Tier 1 conditions to generation 20,
-   sampling temperature, accumulate vs replace, a confirmation at the paper's lr 1e-5, and a 3-seed auxiliary-loss weight sweep.
+   Tier 2 (164 jobs in seven Slurm array jobs, priority order a-g): weak generator (generation 0 trained for 250-1,500 steps, then 10 further
+   generations), continuing four Tier 1 conditions to generation 20, sampling temperature, accumulate vs replace, a confirmation at the paper's
+   lr 1e-5, and a 3-seed auxiliary-loss weight sweep at lr 3e-4 / 5,000 steps (plus the lr 1e-4 / 15,000-step version as a second check).
    The jobs are listed in experiments/manifest.py; slurm/t2_*.slurm are the array scripts, slurm/smoke_tier2.sh a one-job smoke test of every
    new code path, slurm/submit_tier2.sh submits everything and records the job IDs, slurm/package_results_exact.sh packs the outputs and
    CLUSTER_RUN.md is the step-by-step list of what to do by hand. Chains are resumable (src/collapse.py): re-running a task continues from

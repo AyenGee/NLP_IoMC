@@ -8,7 +8,7 @@
 #
 # Types checked: weak generator (generation 0 trained for fewer steps), continuation / resume (a chain run to generation 2 and then
 # continued to 4 gives the same first two rows and writes two more), temperature (greedy), accumulate (the training pool grows
-# R + S_1 + S_2), lr 1e-5 config, the loss-weight sweep (a "train" job), plus the single-core step throughput.
+# R + S_1 + S_2), lr 1e-5 config, the two loss-weight sweeps ("train" jobs), plus the single-core step throughput.
 #
 #SBATCH --job-name=icl-smoke2
 #SBATCH --partition=batch
@@ -43,9 +43,10 @@ PY
 
 python3 experiments/check_manifest.py || fail "check_manifest.py"
 
-# 1. weak generator: generation 0 trained for 20 steps, then 2 more generations
-run weakgen exact_extended_weak750_s0 "${TINY[@]}" --override gen0_steps=20
+# 1. weak generator: generation 0 trained for 20 steps, then 2 more generations (the real jobs run 10 further generations: 11 in all)
+run weakgen exact_extended_weak750_s0 "${TINY[@]}" --override gen0_steps=20 --override n_generations=3
 [ "$(rows $OUT/collapse/exact_extended_weak750_s0/generations.csv)" = 3 ] || fail "weak generator: expected 3 generations"
+python experiments/run_array_task.py --group weakgen --task-id "$(python3 experiments/manifest.py --find weakgen exact_extended_weak750_s0)" --dry-run | grep -q "n_generations': 11" || fail "weak generator job should ask for 11 generations"
 python - <<'PY' || fail "weak generator: generation 0 should have 20 steps and the later ones 40"
 import csv
 r = list(csv.DictReader(open("results/smoke_tier2/collapse/exact_extended_weak750_s0/generations.csv")))
@@ -84,9 +85,11 @@ PY
 
 # 5. lr 1e-5 config (tiny budget here)
 run lr1e5 exact_lr1e5_extended_p1_s0 "${TINY[@]}" --override n_generations=2
-# 6. loss-weight sweep: a single training
+# 6. loss-weight sweeps (lr 3e-4 / 5,000 steps and the lr 1e-4 / 15,000 steps second check): a single training each
 run sweep lw3_s2w0.3_s0 --override steps=40 --override eval_every=20
 [ -f "$OUT/checkpoints/lw3_s2w0.3_s0.pt" ] && [ -f "$OUT/logs/lw3_s2w0.3_s0.csv" ] || fail "sweep: no checkpoint or log written"
+run sweep1e4 lw3b_lr1e-4_s2w0.3_s0 --override steps=40 --override eval_every=20
+[ -f "$OUT/checkpoints/lw3b_lr1e-4_s2w0.3_s0.pt" ] || fail "sweep1e4: no checkpoint written"
 
 # 7. throughput of one core on this node (compare with the development machine: base 119, extended 94 steps/s alone, ~51 with 4 jobs at once)
 echo; echo "=== single-core throughput"; python experiments/benchmark.py
