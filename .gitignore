@@ -27,3 +27,5 @@ slurm/logs/*.out
 slurm/logs/*.err
 !slurm/logs/.gitkeep
 data/*.h5
+continue20_inputs.tar.gz
+results_exact_*.tar.gz

@@ -78,6 +78,22 @@ where, is recorded in results/PROVENANCE.md.
    - Hardware note: runs on this repository's development machine took about 70-120 steps/s per single-threaded run
      depending on how many ran at once (src/train.py); see experiments/benchmark.py and slurm/benchmark.slurm for the cluster.
 
+6. Results so far and Tier 2 (see results/RESULTS_NOTES.md, results/PROVENANCE.md, CLUSTER_RUN.md)
+   Tier 1 (48 chains, lr 3e-4, 160,000 sequences = 5,000 steps per generation, run locally):
+       python experiments/run_array_task.py --group tier1 --task-id <0..47>     (the Slurm array does this: slurm/run_tier1.slurm)
+       python experiments/analyze_collapse_circuits.py --group-id <0..5>        (per-generation ablations, ACDC, embeddings)
+       python experiments/analyze_exact.py --collapse                           (summary JSON + figures)
+       python experiments/analyze_gen0_s2.py                                    (the generation-0 S2 head on real data)
+   Tier 2 (152 jobs in six Slurm array jobs, priority order a-f): weak generator, continuing four Tier 1 conditions to generation 20,
+   sampling temperature, accumulate vs replace, a confirmation at the paper's lr 1e-5, and a 3-seed auxiliary-loss weight sweep.
+   The jobs are listed in experiments/manifest.py; slurm/t2_*.slurm are the array scripts, slurm/smoke_tier2.sh a one-job smoke test of every
+   new code path, slurm/submit_tier2.sh submits everything and records the job IDs, slurm/package_results_exact.sh packs the outputs and
+   CLUSTER_RUN.md is the step-by-step list of what to do by hand. Chains are resumable (src/collapse.py): re-running a task continues from
+   its last completed generation, and a 10-generation chain can be continued to 20 with the same result as one 20-generation run.
+       python experiments/progress.py [--groups ... --verbose]                   finished / partly done / not started, and the ids to resubmit
+   New CollapseConfig options (defaults reproduce Tier 1): mode "accumulate" (real pool + all earlier synthetic pools, Gerstgrasser et al.
+   2024), gen0_steps (a weak generator). The pilot's extended abstract, tables and figures are in abstract/pilot_symbolic/ (moved, not edited).
+
 THE SYMBOLIC PILOT (earlier work, kept for reference)
 =====================================================
 MODEL COLLAPSE AND IN-CONTEXT LEARNING: DOES RECURSIVE TRAINING DEGRADE
@@ -91,7 +107,7 @@ sequence of generations, each on data partly or wholly sampled from the
 previous generation's model, and interpretability tooling to track how the
 induction-head circuit responds.
 
-See abstract/main.tex for the full write-up, background, and discussion.
+See abstract/pilot_symbolic/main.tex for the full write-up, background, and discussion.
 This file covers how to reproduce the code's results, either locally or on
 the Wits mscluster HPC cluster.
 
@@ -199,7 +215,7 @@ This is the script behind every number and the quantitative figures in the
 abstract. It writes results/analysis_summary.json (all quoted numbers: failure
 counts with intervals, the 2 x 2 protocol design, generation-0 training
 tables, hyper-parameter study, circuit and ACDC summaries) and, in
-abstract/figures/: fig_main.png and fig_pools.png (original-protocol runs),
+abstract/pilot_symbolic/figures/: fig_main.png and fig_pools.png (original-protocol runs),
 fig_v2.png (corrected-protocol runs), fig_training.png (generation-0 learning
 curves), fig_failure_map.png (every model). Figures that need results which
 are not present are skipped. Figures are drawn per seed, NOT as mean +- std:
@@ -325,7 +341,7 @@ See slurm/ for the job scripts used below.
 
     f) Once all three array jobs show COMPLETED in squeue/sacct:
          sbatch slurm/make_figures.slurm
-       then pull results/ and abstract/figures/ back to your machine
+       then pull results/ and abstract/pilot_symbolic/figures/ back to your machine
        (scp/rsync) to finish writing the abstract.
 
     g) FOLLOW-UP VALIDITY CHECKS (added after reading the first results; each
@@ -435,10 +451,10 @@ See slurm/ for the job scripts used below.
           unpack into the repo, then locally:
             python experiments/analyze_results.py
           which writes results/analysis_summary.json (every number to quote)
-          and the figures in abstract/figures/, then
+          and the figures in abstract/pilot_symbolic/figures/, then
             python experiments/make_tex_tables.py
-          which writes the abstract's tables (abstract/tables/*.tex) from that
-          summary. Rebuild abstract/main.tex (Overleaf: upload the abstract/
+          which writes the abstract's tables (abstract/pilot_symbolic/tables/*.tex) from that
+          summary. Rebuild abstract/pilot_symbolic/main.tex (Overleaf: upload the abstract/pilot_symbolic/
           folder and ethics/) and check the two-page limit. Keep results/ and the
           Slurm logs in the submission archive (they are not in git).
 
@@ -481,7 +497,7 @@ need, test small before scaling up, and clean up files you don't need.
     slurm/            mscluster job scripts (see Section 6), package_results.sh,
                       slurm/logs/
     results/          logs (CSV), checkpoints, collapse-run data/models, figures
-    abstract/         extended abstract (main.tex, CCN 2-page format) + figures/
+    abstract/         pilot_symbolic/: the pilot extended abstract (main.tex, tables/, figures/); style files for the new report
     ethics/           NeurIPS 2024 ethics checklist (placeholder, see file) +
                       Faculty of Science AI ethics statement
 

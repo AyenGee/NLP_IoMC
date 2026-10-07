@@ -24,7 +24,28 @@ to every printed digit.
 
 ## Cluster (mscluster)
 
-(none yet; Tier 1 collapse runs are `sbatch slurm/run_tier1.slurm`, see README)
+Tier 1 was not run on the cluster (see "Tier 1 collapse" above). Tier 2 (Gate 4 decision of 7 Oct 2026) is submitted by the user with
+`bash slurm/submit_tier2.sh` (CLUSTER_RUN.md); the job IDs are recorded here when given:
+
+| group | what | tasks | Slurm job ID | submitted | time limit | state |
+|---|---|---|---|---|---|---|
+| weakgen | weak generator | 50 | (not yet submitted) | | 00:15 | |
+| continue20 | Tier 1 conditions to generation 20 | 32 | (not yet submitted) | | 00:50 | |
+| temperature | T = 0.5, 2, greedy | 30 | (not yet submitted) | | 00:45 | |
+| accumulate | accumulate vs replace | 16 | (not yet submitted) | | 00:45 | |
+| lr1e5 | paper's lr 1e-5 confirmation | 12 | (not yet submitted) | | 02:40 | |
+| sweep | S2-weight sweep, 3 seeds | 12 | (not yet submitted) | | 00:10 | |
+| smoke test | `slurm/smoke_tier2.sh` | 1 | (not yet run) | | 00:45 | |
+| unit tests on the cluster | `slurm/test_exact.slurm` | 1 | (not yet run) | | 00:30 | |
+
+Code state for Tier 2: branch `exact-singh-rebuild`, commit recorded in `slurm/logs/submitted_tier2_<timestamp>.txt` by `submit_tier2.sh`.
+Local checks done before handing over: `tests/test_exact.py` (127 checks, including resume equivalence and manifest/Slurm consistency);
+`slurm/smoke_tier2.sh` run locally; the replay of the sampling generator reproduces every saved pool of `exact_base_p1_s0` and
+`exact_extended_p05_s1` (generations 1-9, 100% of rows), which is what makes the continuation to generation 20 exact.
+
+## Generation-0 S2 head on real data (local, 7 Oct 2026)
+
+`python experiments/analyze_gen0_s2.py` -> `results/exact/gen0_s2_quality.{json,md}` (8 Tier 1 generation-0 models and the 3 lr 1e-5 `gen0w_extended` runs).
 
 ## Tier 1 collapse (run locally, not on the cluster)
 

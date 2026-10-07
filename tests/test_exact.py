@@ -298,6 +298,98 @@ check("the Tier 1 figures are written (accuracy, head scores, match vs copy, S2 
 check("permutation test: identical groups give p = 1 and fully separated groups the minimum", ACL.perm_test([1, 2, 3, 4], [1, 2, 3, 4]) == 1.0 and abs(ACL.perm_test([1, 2, 3, 4], [10, 11, 12, 13]) - round(2 / 70, 4)) < 1e-9)
 check("Wilson interval for 0 of 10 is [0, ~0.28]", ACL.wilson(0, 10)[0] == 0.0 and abs(ACL.wilson(0, 10)[1] - 0.278) < 0.002)
 
+# ------------------------------------------------------------------ Tier 2 machinery: resumable chains, accumulate, weak generator, manifest
+import dataclasses as _dc, json as _json, subprocess as _sp
+import manifest as MF, run_array_task as RAT, check_manifest as CMF
+
+def _rows(path):
+    return [{k: v for k, v in r.items() if k != "seconds"} for r in csv.DictReader(open(path))]
+def _same_model(a, b):
+    sa, sb = torch.load(a, weights_only=False)["model_state"], torch.load(b, weights_only=False)["model_state"]
+    return all(torch.equal(sa[k], sb[k]) for k in sa)
+def _cfg(name, n, **kw):
+    base_kw = dict(variant="base", p_synthetic=0.5, seed=4, steps=10, eval_every=10, n_generations=n, gen0_steps=5, out_dir=str(TMP / name))
+    base_kw.update(kw)
+    return CO.CollapseConfig(**base_kw)
+
+# one go (A) vs 2 generations then resumed (B, with the saved generator state) vs resumed after the generator state is deleted (C, replayed
+# from the saved models, as for the Tier 1 chains which did not save it) vs a crash that left generation 2's files but not its row (F)
+CO.run_collapse(_cfg("rsm_A", 3), features=feats, verbose=False)
+CO.run_collapse(_cfg("rsm_B", 2), features=feats, verbose=False)
+CO.run_collapse(_cfg("rsm_B", 3), features=feats, verbose=False)
+CO.run_collapse(_cfg("rsm_C", 2), features=feats, verbose=False)
+for f in (TMP / "rsm_C").glob("gen*_rng.pt"):
+    f.unlink()
+CO.run_collapse(_cfg("rsm_C", 3), features=feats, verbose=False)
+shutil.copytree(TMP / "rsm_A", TMP / "rsm_F")
+_lines = open(TMP / "rsm_F" / "generations.csv").read().splitlines()
+open(TMP / "rsm_F" / "generations.csv", "w").write("\n".join(_lines[:3]) + "\n")        # header + generations 0 and 1: generation 2 "was killed"
+(TMP / "rsm_F" / "gen2_model.pt").unlink()
+CO.run_collapse(_cfg("rsm_F", 3), features=feats, verbose=False)
+check("weak generator: generation 0 is trained for gen0_steps (5), the others for the budget (10)", [int(float(r["steps"])) for r in _rows(TMP / "rsm_A" / "generations.csv")] == [5, 10, 10])
+check("resumable chain: 2 generations + a resume to 3 is identical to one 3-generation run (every logged number and the final model)",
+      _rows(TMP / "rsm_B" / "generations.csv") == _rows(TMP / "rsm_A" / "generations.csv") and _same_model(TMP / "rsm_B" / "gen2_model.pt", TMP / "rsm_A" / "gen2_model.pt")
+      and np.array_equal(np.load(TMP / "rsm_B" / "gen2_pool.npz")["pool"], np.load(TMP / "rsm_A" / "gen2_pool.npz")["pool"]))
+check("resumable chain: the sampling generator replayed from the saved models (no generator state on disk) gives the same chain",
+      _rows(TMP / "rsm_C" / "generations.csv") == _rows(TMP / "rsm_A" / "generations.csv") and _same_model(TMP / "rsm_C" / "gen2_model.pt", TMP / "rsm_A" / "gen2_model.pt"))
+check("resumable chain: a generation without its row (killed run) is retrained and gives the same result", _rows(TMP / "rsm_F" / "generations.csv") == _rows(TMP / "rsm_A" / "generations.csv") and _same_model(TMP / "rsm_F" / "gen2_model.pt", TMP / "rsm_A" / "gen2_model.pt"))
+_before = (TMP / "rsm_A" / "generations.csv").read_bytes()
+CO.run_collapse(_cfg("rsm_A", 3), features=feats, verbose=False)
+check("a chain that already has every requested generation is left untouched", (TMP / "rsm_A" / "generations.csv").read_bytes() == _before)
+try:
+    CO.run_collapse(_cfg("rsm_B", 4, lr=0.5), features=feats, verbose=False); _refused = False
+except ValueError as e:
+    _refused = "refusing to resume" in str(e)
+check("resuming with different settings (lr) is refused rather than mixing two protocols", _refused)
+_rc = _json.load(open(TMP / "rsm_B" / "run_config.json"))
+check("run_config.json records the resume (from generation 2) and the final number of generations", _rc["resumes"][0]["from_generation"] == 2 and _rc["collapse"]["n_generations"] == 3)
+# a chain written before mode / gen0_steps existed (the Tier 1 chains) resumes: the missing fields take their defaults
+CO.run_collapse(_cfg("rsm_old", 2, gen0_steps=None), features=feats, verbose=False)
+_oc = _json.load(open(TMP / "rsm_old" / "run_config.json")); del _oc["collapse"]["mode"], _oc["collapse"]["gen0_steps"]
+_json.dump(_oc, open(TMP / "rsm_old" / "run_config.json", "w"))
+for _f in (TMP / "rsm_old").glob("gen*_rng.pt"):
+    _f.unlink()
+CO.run_collapse(_cfg("rsm_old", 3, gen0_steps=None), features=feats, verbose=False)
+check("a run_config.json written before mode / gen0_steps existed is compatible with the defaults, so Tier 1 chains can be continued", len(_rows(TMP / "rsm_old" / "generations.csv")) == 3)
+
+# accumulate: R + S_1 + ... + S_g, the new synthetic pool is what gen<g>_pool.npz holds
+CO.run_collapse(_cfg("acc_A", 3, mode="accumulate", gen0_steps=None, variant="base"), features=feats, verbose=False)
+CO.run_collapse(_cfg("acc_B", 2, mode="accumulate", gen0_steps=None, variant="base"), features=feats, verbose=False)
+CO.run_collapse(_cfg("acc_B", 3, mode="accumulate", gen0_steps=None, variant="base"), features=feats, verbose=False)
+ra = list(csv.DictReader(open(TMP / "acc_A" / "generations.csv")))
+check("accumulate: the training pool is N, 2N, 3N rows at generations 0, 1, 2 (real pool + every synthetic pool so far), synthetic share 0, 1/2, 2/3",
+      [int(float(r["pool_pool_size"])) for r in ra] == [78400, 2 * 78400, 3 * 78400] and abs(float(ra[2]["pool_frac_synthetic"]) - 2 / 3) < 1e-9 and abs(float(ra[1]["pool_frac_synthetic"]) - 0.5) < 1e-9)
+check("accumulate: the statistics of the newest synthetic pool alone are logged as pool_new_*, and gen<g>_pool.npz holds that pool (all rows synthetic, N rows)",
+      "pool_new_lq_correct_synthetic" in ra[1] and len(np.load(TMP / "acc_A" / "gen2_pool.npz")["pool"]) == 78400 and bool((np.load(TMP / "acc_A" / "gen2_pool.npz")["pool"][:, D.LQ_SYN] >= 0).all()))
+check("accumulate: a resumed chain equals the chain run in one go", _rows(TMP / "acc_B" / "generations.csv") == _rows(TMP / "acc_A" / "generations.csv") and _same_model(TMP / "acc_B" / "gen2_model.pt", TMP / "acc_A" / "gen2_model.pt"))
+try:
+    CO.run_collapse(_cfg("acc_X", 2, mode="nonsense"), features=feats, verbose=False); _bad_mode = False
+except ValueError:
+    _bad_mode = True
+check("an unknown mode is rejected", _bad_mode)
+
+# the manifest: sizes, unique outputs, configs, scripts and time limits agree
+sizes = {g: len(j) for g, j in MF.GROUPS.items()}
+check("manifest group sizes: tier1 48, weakgen 50, continue20 32, temperature 30, accumulate 16, lr1e5 12, sweep 12",
+      sizes == {"tier1": 48, "weakgen": 50, "continue20": 32, "temperature": 30, "accumulate": 16, "lr1e5": 12, "sweep": 12}, str(sizes))
+check("check_manifest.py: every Slurm script's array range and time limit match its group, configs exist, no output name clashes", CMF.main() == 0)
+check("the continuation jobs reuse the Tier 1 run names (they resume those chains) and ask for 20 generations", all(j.run_name in {x.run_name for x in MF.GROUPS["tier1"]} and dict(j.overrides) == {"n_generations": 20} for j in MF.GROUPS["continue20"]))
+r_ = RAT.resolve(MF.GROUPS["sweep"][4], Path("results/exact"), {})
+check("sweep job resolves to the extended model at lr 1e-4, 15,000 steps and loss weights (1, w, 1), seed in the name and the output path",
+      r_["kind"] == "train" and r_["kw"]["loss_weights"] == (1.0, 0.5, 1.0) and r_["kw"]["steps"] == 15000 and r_["kw"]["sequences"] is None and r_["kw"]["variant"] == "extended" and r_["kw"]["lr"] == 1e-4 and r_["name"] == "lw3_s2w0.5_s1" and r_["kw"]["ckpt_path"].endswith("lw3_s2w0.5_s1.pt"))
+r_ = RAT.resolve(MF.GROUPS["continue20"][5], Path("results/exact"), RAT.parse_overrides(["n_generations=4", "steps=40"]))
+check("--override wins over the job's own overrides, a step override replaces the sequence budget, and the output directory is the Tier 1 one",
+      r_["kw"]["n_generations"] == 4 and r_["kw"]["steps"] == 40 and r_["kw"]["sequences"] is None and r_["kw"]["out_dir"].replace("\\", "/").endswith("collapse/exact_base_p1_s5"))
+r_ = RAT.resolve(MF.GROUPS["weakgen"][0], Path("results/exact"), {})
+check("weak-generator job: 3 generations, generation 0 trained for 250 steps, fully synthetic", r_["kw"]["n_generations"] == 3 and r_["kw"]["gen0_steps"] == 250 and r_["kw"]["p_synthetic"] == 1.0)
+_tj = [RAT.resolve(j, Path("results/exact"), {})["kw"] for j in MF.GROUPS["temperature"]]
+check("temperature jobs cover T = 0.5, 2 and greedy for both variants", {(k["variant"], k["temperature"], k["greedy"]) for k in _tj} == {(v, t, g) for v in ("base", "extended") for t, g in ((0.5, False), (2.0, False), (1.0, True))})
+_aj = [RAT.resolve(j, Path("results/exact"), {})["kw"] for j in MF.GROUPS["accumulate"]]
+check("accumulate jobs use mode accumulate, fully synthetic", all(k["mode"] == "accumulate" and k["p_synthetic"] == 1.0 for k in _aj))
+_lj = [RAT.resolve(j, Path("results/exact"), {})["kw"] for j in MF.GROUPS["lr1e5"]]
+check("lr 1e-5 jobs use the paper's lr and 1,000,000 sequences per generation", all(k["lr"] == 1e-5 and k["sequences"] == 1_000_000 for k in _lj))
+check("Tier 2 configs share Tier 1's lr, budget and loss weights (except the lr 1e-5 ones)", all((k["lr"], k["sequences"]) == (3e-4, 160000) for k in [RAT.resolve(j, Path("results/exact"), {})["kw"] for g in ("weakgen", "temperature", "accumulate") for j in MF.GROUPS[g]]))
+
 shutil.rmtree(TMP, ignore_errors=True)
 print("\n==== FAILED:", FAILS if FAILS else "none ====")
 sys.exit(1 if FAILS else 0)

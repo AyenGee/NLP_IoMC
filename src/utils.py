@@ -51,14 +51,19 @@ def load_config(path: str | Path) -> dict:
 
 
 class CSVLogger:
-    """Append-only CSV logger; writes the header from the first row's keys."""
+    """Append-only CSV logger; writes the header from the first row's keys. An existing file is deleted unless
+    ``resume=True``, which keeps it and appends under its header (a chain resumed after a time-out)."""
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, resume: bool = False):
         self.path = Path(path)
         ensure_dir(self.path.parent)
         self._fieldnames: list[str] | None = None
         if self.path.exists():
-            self.path.unlink()
+            if resume:
+                with open(self.path, newline="") as f:
+                    self._fieldnames = next(csv.reader(f), None)
+            else:
+                self.path.unlink()
 
     def log(self, row: dict) -> None:
         row = {k: (v.item() if hasattr(v, "item") else v) for k, v in row.items()}

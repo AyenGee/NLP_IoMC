@@ -5,7 +5,8 @@
 
 Outputs under --out-root (default results/exact/collapse)/<name>/: generations.csv (one row per generation),
 gen<g>_train.csv (full per-evaluation log), gen<g>_model.pt, gen<g>_pool.npz (the exact training pool), run_config.json.
-A YAML --config holds CollapseConfig fields under ``collapse:``; flags override it.
+A YAML --config holds CollapseConfig fields under ``collapse:``; flags override it. Re-running a command whose output directory
+already holds completed generations resumes it (see src/collapse.py), e.g. with a larger --generations.
 """
 
 from __future__ import annotations
@@ -37,11 +38,13 @@ def main():
     ap.add_argument("--eval-every", type=int, dest="eval_every")
     ap.add_argument("--temperature", type=float)
     ap.add_argument("--greedy", action="store_true")
+    ap.add_argument("--mode", choices=["replace", "accumulate"])
+    ap.add_argument("--gen0-steps", type=int, dest="gen0_steps", help="train generation 0 for this many steps only (weak-generator test)")
     args = ap.parse_args()
 
     fields = {f.name for f in dataclasses.fields(CollapseConfig)}
     kw = dict(load_config(args.config)["collapse"]) if args.config else {}
-    for key in ["variant", "p_synthetic", "n_generations", "seed", "lr", "sequences", "steps", "eval_every", "temperature"]:
+    for key in ["variant", "p_synthetic", "n_generations", "seed", "lr", "sequences", "steps", "eval_every", "temperature", "mode", "gen0_steps"]:
         if getattr(args, key) is not None:
             kw[key] = getattr(args, key)
     if args.steps is not None:

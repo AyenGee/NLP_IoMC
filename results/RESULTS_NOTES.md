@@ -18,7 +18,12 @@ Learning rate 3e-4 and 5,000 steps (160,000 sequences) per generation were chose
    accuracy without the paper's circuit (accuracy on held-out label pairs 0.40-0.54, induction strength ~0, at lr 1e-5/1e-4/3e-4;
    `tuning_table.md`, variant `extended_equal`). The 50-way S2 loss at weight 1 is what prevents it (weight sweep, `lw_*` runs,
    lr 1e-4 seed 0, 15k steps, l_S2 weight 1: S2 weight 0.5 -> held-out-pair accuracy 0.69; 0.3 -> 0.99; 0.1 -> 1.00). Weights (1, 0.1, 0.1) are used throughout.
-2. **Budget unit.** The plan's "1,000,000 steps" is read as the reference code's 1,000,000 *sequences* (31,250 steps at batch 32).
+2. **Budget unit.** The plan's "1,000,000 steps" is read as the reference code's 1,000,000 *sequences* (31,250 steps at batch 32). Checked
+   against the paper's text (arXiv 2404.07129, PDF text layer): Appendix A gives "a batch size of 32 sequences" and a constant lr of 1e-5; Appendix B says a
+   standard run takes about 7 minutes "for 1e6 sequences seen"; the training-curve figures for the clamped and data-dependent experiments (Figures 5, 6
+   and 12) are plotted against "# sequences seen". The axis label of Figure 3 itself is not in the PDF's text layer, so it is not independently checked here.
+   Our lr 1e-5 phase change at 11,000-13,500 steps is 3.5-4.3e5 sequences, inside the paper's 1e6-sequence run; whether it matches the timing in the
+   paper's Figure 3 was not compared (the figure's data are not in the text).
 3. **Learning rate 3e-4, not the paper's 1e-5**, with a 5,000-step budget per generation (phase change at 750-1,000 steps).
    Same circuit as at 1e-5 in all 3 seeds (table). Collapse dynamics at the paper's lr were not run.
 4. **Held-out accuracy ceiling.** Accuracy on held-out exemplars (`val`, `test_exemplars`) is ~0.85-0.87 even at generation 0
@@ -100,6 +105,31 @@ the real data holds in place rather than an accumulating one. Chain-level S2 dri
 First generation at which accuracy on cross-drawing matching (`test_class_ex0`) vs held-out label pairs (copy) drops by more than 0.05 from generation 0:
 base p=1: copy first in 2 seeds, match first in 0, neither in 6; extended p=1: copy first in 1 seed, neither in 7; no drops in any other condition. The data cannot
 say which fails first; they only say neither fails much in 10 generations. Copy is the more sensitive of the two (0.9993 -> 0.982 base p=1; match 0.993 -> 0.974).
+
+### 3.6 How good is the generation-0 S2 head, and how much of the generation-1 drift is already there?
+
+`experiments/analyze_gen0_s2.py` -> `results/exact/gen0_s2_quality.{json,md}` (8 generation-0 models of the Tier 1 chains at lr 3e-4; 3 weighted replication
+runs at lr 1e-5; real sequences of the training classes, since the S2 head has one output per training class). Median over models [min, max]:
+
+| models, set | softmax mass outside {A, B} (real: 0) | S2 accuracy (Bayes 0.5) | mean p(true S2) (Bayes 0.5) | l_S2 accuracy, teacher-forced (Bayes 1) | sampled: S2 outside context |
+|---|---|---|---|---|---|
+| lr 3e-4, train_eval (training exemplars) | 0.077 [0.071, 0.091] | 0.499 [0.475, 0.518] | 0.460 [0.445, 0.468] | 1.000 | 0.080 [0.059, 0.106] |
+| lr 3e-4, test_relabel (held-out label pairs) | 0.079 [0.067, 0.094] | 0.500 [0.466, 0.526] | 0.461 | 0.999 | 0.077 |
+| lr 3e-4, val (held-out exemplars) | 0.703 [0.689, 0.713] | 0.206 [0.195, 0.232] | 0.141 | 0.862 [0.827, 0.888] | 0.703 |
+| lr 1e-5, train_eval | 0.392 [0.379, 0.445] | 0.496 [0.493, 0.505] | 0.303 | 0.990 | 0.388 |
+| lr 1e-5, val | 0.855 [0.852, 0.856] | 0.140 | 0.070 | 0.802 | 0.853 |
+
+- On the training exemplars the S2 head is at the Bayes limit in accuracy (0.499) and the l_S2 copy is perfect, but it leaves 7.7% of its probability outside the
+  two context classes (mean p of the true S2 is 0.46, not 0.5). The generation-1 pool *is* this model's sampling over all 78,400 training contexts, and its
+  S2-outside-context rate (0.078) agrees with the model's own expected mass (0.077): **all of the 0.078 is generation 0's own behaviour; none of it is
+  created by training on synthetic data.** What synthetic training adds is the *growth* afterwards (0.078 -> 0.140 -> 0.196 -> ... -> 0.458 at generation 9, medians
+  of the 8 fully synthetic chains, a rise of about 0.04-0.06 per generation).
+- On held-out exemplars (val) the S2 head fails: 0.70 of the mass is outside the context and accuracy is 0.21. S2 asks for the *class identity* of A or B as a
+  50-way output; the model only ever saw exemplar 0 of each class, so identifying the class from another drawing is a memorised lookup that does not
+  transfer (the query-label induction circuit copies labels and does not need class identity). So the S2 target measures training-set memorisation, not
+  in-context ability, and the drift of S2 under collapse is a statement about this memorised lookup.
+- At the paper's lr 1e-5 (31,250 steps, auxiliary weights 0.1) the S2 head is much less trained (0.39 outside the context even on training exemplars). The lr 1e-5
+  confirmation runs will therefore start the S2 drift from a very different generation-1 pool; this is a property of the weighted auxiliary loss at the small lr.
 
 ## 4. What Tier 1 does and does not show
 

@@ -2,9 +2,9 @@
 by hand.
 
     python experiments/analyze_results.py        # writes the summary JSON
-    python experiments/make_tex_tables.py        # writes abstract/tables/*.tex
+    python experiments/make_tex_tables.py        # writes abstract/pilot_symbolic/tables/*.tex
 
-abstract/main.tex \\input's these files. Re-run both scripts whenever the results change.
+abstract/pilot_symbolic/main.tex \\input's these files. Re-run both scripts whenever the results change.
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ def tab_base(S, out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--summary", default=str(ROOT / "results" / "analysis_summary.json"))
-    ap.add_argument("--out", default=str(ROOT / "abstract" / "tables"))
+    ap.add_argument("--out", default=str(ROOT / "abstract" / "pilot_symbolic" / "tables"))
     args = ap.parse_args()
     S = json.load(open(args.summary))
     out = Path(args.out)

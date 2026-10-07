@@ -1,0 +1,3 @@
+# Scripts must keep Unix line endings: they run on the Linux cluster (and a CRLF shebang line fails there).
+*.sh text eol=lf
+*.slurm text eol=lf

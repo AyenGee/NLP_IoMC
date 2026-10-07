@@ -4,12 +4,12 @@
 
 Reads results/ (written by the cluster jobs / run_all.py), writes
   results/analysis_summary.json     every number quoted in the report
-  abstract/figures/fig_main.png     per-seed accuracy / induction score / train-vs-val dynamics
-  abstract/figures/fig_failure_map.png   accuracy of every (condition, seed, generation) + KL vs. noise floor
-  abstract/figures/fig_training.png      generation-0 learning curves (loss, accuracy, induction score), per seed
-  abstract/figures/fig_v2.png            corrected-protocol runs: accuracy per generation per seed, induction score
-  abstract/figures/fig_main_v2.png       main-text figure: accuracy per seed, duplicates vs none vs real-data control vs base
-  abstract/figures/fig_mech_v2.png       main-text figure: induction score, non-classic share, ACDC circuit size
+  abstract/pilot_symbolic/figures/fig_main.png     per-seed accuracy / induction score / train-vs-val dynamics
+  abstract/pilot_symbolic/figures/fig_failure_map.png   accuracy of every (condition, seed, generation) + KL vs. noise floor
+  abstract/pilot_symbolic/figures/fig_training.png      generation-0 learning curves (loss, accuracy, induction score), per seed
+  abstract/pilot_symbolic/figures/fig_v2.png            corrected-protocol runs: accuracy per generation per seed, induction score
+  abstract/pilot_symbolic/figures/fig_main_v2.png       main-text figure: accuracy per seed, duplicates vs none vs real-data control vs base
+  abstract/pilot_symbolic/figures/fig_mech_v2.png       main-text figure: induction score, non-classic share, ACDC circuit size
 
 Why per-seed views instead of mean +- std: outcomes are bimodal (a generation's
 model either learns induction, ~100% accuracy, or fails to, ~25%), so a mean
@@ -1046,7 +1046,7 @@ def fig_failure_map(results: Path, figdir: Path, floor: float):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default=str(ROOT / "results"))
-    ap.add_argument("--figdir", default=str(ROOT / "abstract" / "figures"))
+    ap.add_argument("--figdir", default=str(ROOT / "abstract" / "pilot_symbolic" / "figures"))
     ap.add_argument("--pilot", action="store_true", help="analyse the symbolic pilot runs (the only mode so far)")
     args, rest = ap.parse_known_args()
     if not args.pilot:
